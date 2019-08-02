@@ -618,27 +618,34 @@ class Signal:
                 continue
 
     def send_message(self, contact, message="", attachments=None):
-        if not attachments:
-            attachments = []
+        if attachments or not contact.get('number'):
+            args = ['signal-cli', '--dbus', 'send', '--message', message]
+            target = None
+            if contact.get('number'):
+                target = contact['number']
+            else:
+                target = contact['groupId']
+                args.append('--group')
+            args.append(target)
 
-        args = ['signal-cli', '--dbus', 'send', '--message', message]
-        target = None
-        if contact.get('number'):
+            attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
+            if all([os.path.exists(attachment_path) for attachment_path in attachment_paths]):
+                if attachment_paths:
+                    args.append('--attachment')
+                for attachment_path in attachment_paths:
+                    args.append(attachment_path)
+            else:
+                logging.warning('send_message: Attached file(s) does not exist.')
+                return
+        else:
+            # didn't figure out how to send attachments via dbus, yet
+            if not attachments:
+                attachments = []
             target = contact['number']
-        else:
-            target = contact['groupId']
-            args.append('--group')
-        args.append(target)
-
-        attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
-        if all([os.path.exists(attachment_path) for attachment_path in attachment_paths]):
-            if attachment_paths:
-                args.append('--attachment')
-            for attachment_path in attachment_paths:
-                args.append(attachment_path)
-        else:
-            logging.warning('send_message: Attached file(s) does not exist.')
-            return
+            args = ['dbus-send', '--session', '--dest=org.asamk.Signal',
+                    '--type=method_call', '/org/asamk/Signal',
+                    'org.asamk.Signal.sendMessage', 'string:' + message,
+                    'array:string:', 'array:string:' + target]
 
         p = Popen(args, stdout=PIPE, stderr=PIPE)
         _out, error = p.communicate()
