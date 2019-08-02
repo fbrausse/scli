@@ -685,6 +685,7 @@ class Signal:
 
     def get_all_contacts(self):
         xs = []
+        xs.append('---')
         xs.append('Groups')
         xs.append('---')
         xs.extend(self.groups())
@@ -705,10 +706,9 @@ class ContactsWindow(urwid.ListBox):
 
     def __init__(self, state):
         self.state = state
-        self._body = []
         self.notify_count = 0
 
-        super().__init__(urwid.SimpleFocusListWalker(self._body))
+        super().__init__(urwid.SimpleFocusListWalker([]))
         self.set_contacts(self.state.signal.get_all_contacts())
 
         urwid.connect_signal(self.state.signal, 'receive_message', self.on_receive_message)
@@ -737,7 +737,7 @@ class ContactsWindow(urwid.ListBox):
         if contact == self.state.current_contact or not has_msg:
             return
 
-        for w in self._body:
+        for w in self.body:
             if w.contact == contact:
                 self.set_contact_notify_count(w, w.notify_count + 1)
                 return
@@ -753,6 +753,14 @@ class ContactsWindow(urwid.ListBox):
             else:
                 widget = urwid.Text(get_contact_name(x))
                 contact = x
+                # we want to "select" and interact with these Text widgets
+                widget._selectable = True
+                def keypress(size, key):
+                    if key in ('enter', 'l'):
+                        self.state.set_current_contact(x, key == 'enter')
+                        return None
+                    return key
+                widget.keypress = keypress
 
             am = urwid.AttrMap(widget, None, focus_map='reversed')
             am.contact = contact
@@ -760,35 +768,22 @@ class ContactsWindow(urwid.ListBox):
             return am
 
         contacts = [mk_contact(x) for x in contacts]
-        self._body.extend(contacts)
+        pre_focus = self.focus
+        self.body[:] = contacts
         try:
-            self.focus_position = 2
+            if pre_focus:
+                self.focus = pre_focus
+            else:
+                self.focus_first()
         except IndexError:
             pass
 
     def get_focused_contact(self):
         return self.focus.contact
 
-    def focus_next(self):
-        try:
-            self.focus_position = self.focus_position + 1
-            if not self.get_focused_contact():
-                self.focus_next()
-        except IndexError:
-            pass
-
-    def focus_prev(self):
-        try:
-            if self.focus_position > 2:
-                self.focus_position = self.focus_position - 1
-                if not self.get_focused_contact():
-                    self.focus_prev()
-        except IndexError:
-            pass
-
     def focus_first(self):
         try:
-            self.focus_position = 2
+            self.focus_position = 0
         except IndexError:
             pass
 
@@ -799,15 +794,12 @@ class ContactsWindow(urwid.ListBox):
             pass
 
     def keypress(self, size, key):
-        key = super().keypress(size, key)
-        if key in ('enter', 'l'):
-            if self.get_focused_contact():
-                self.state.set_current_contact(self.get_focused_contact(), key == 'enter')
-        elif key in ('j', 'down'):
-            self.focus_next()
-        elif key in ('k', 'up'):
-            self.focus_prev()
-        elif key == 'g':
+        if key == 'j':
+            key = 'down'
+        elif key == 'k':
+            key = 'up'
+        key = super(ContactsWindow, self).keypress(size, key)
+        if key == 'g':
             self.focus_first()
         elif key == 'G':
             self.focus_last()
