@@ -51,7 +51,8 @@ PALETTE = [('normal', '', ''),
            ('italic', 'italics', ''),
            ('strikethrough', 'strikethrough', ''),
            ('bolditalic', 'italics,bold', ''),
-           ('reversed', 'standout', '')]
+           ('reversed', 'standout', ''),
+           ('selected', 'underline', '')]
 
 LIST_FOCUS_MAP = { None: 'reversed',
                    'normal': 'reversed',
@@ -730,6 +731,12 @@ class ContactsWindow(urwid.ListBox):
 
     def on_current_contact_changed(self, _old, _current, _focus=False):
         self.set_contact_notify_count(self.focus, 0)
+        if _old != _current:
+            for w in self.body:
+                if w.contact == _old:
+                    w.set_attr_map({None: None})
+                elif w.contact == _current:
+                    w.set_attr_map({None: 'selected'})
 
     def on_receive_message(self, envelope):
         contact = get_envelope_contact(envelope, self.state.signal)
@@ -778,9 +785,6 @@ class ContactsWindow(urwid.ListBox):
         except IndexError:
             pass
 
-    def get_focused_contact(self):
-        return self.focus.contact
-
     def focus_first(self):
         try:
             self.focus_position = 0
@@ -801,8 +805,10 @@ class ContactsWindow(urwid.ListBox):
         key = super(ContactsWindow, self).keypress(size, key)
         if key == 'g':
             self.focus_first()
+            return None
         elif key == 'G':
             self.focus_last()
+            return None
         elif key == 'r':
             pass # TODO: refresh
         return key
