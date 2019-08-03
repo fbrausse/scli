@@ -52,7 +52,7 @@ PALETTE = [('normal', '', ''),
            ('strikethrough', 'strikethrough', ''),
            ('bolditalic', 'italics,bold', ''),
            ('reversed', 'standout', ''),
-           ('selected', 'underline', '')]
+           ('selected', 'bold', '')]
 
 LIST_FOCUS_MAP = { None: 'reversed',
                    'normal': 'reversed',
