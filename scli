@@ -1028,7 +1028,6 @@ class MainWindow(urwid.Frame):
         self.state = state
 
         # ui
-        self.current_focus = 'contacts'
         self._wcontacts = ContactsWindow(self.state)
         self._wchat = ChatWindow(self.state)
         self._wstatus = urwid.Text("...")
@@ -1051,6 +1050,17 @@ class MainWindow(urwid.Frame):
     def set_status(self, txt):
         self._wstatus.set_text(txt)
 
+    @property
+    def current_focus(self):
+        assert self.focus_position == 'body'
+        if len(self._wcontext.contents) == 2 and self._wcontext.focus_position == 0:
+            return 'contacts'
+        elif self._wchat.is_focused_chat():
+            return 'chat'
+        else:
+            assert self._wchat.is_focused_input()
+            return 'input'
+
     def toggle_contacts(self):
         if len(self._wcontext.contents) == 2:
             if self.current_focus == 'contacts':
@@ -1070,10 +1080,8 @@ class MainWindow(urwid.Frame):
         if self.current_focus == 'contacts' and self.state.cfg.contacts_autohide:
             self.toggle_contacts()
 
-        self.focus_position = 'body'
         self._wcontext.set_focus(self.body_pos())
         self._wchat.focus_input()
-        self.current_focus = 'input'
 
         if cmd_mode:
             self._wchat._wline.set_edit_text(':')
@@ -1086,15 +1094,11 @@ class MainWindow(urwid.Frame):
         if len(self._wcontext.contents) == 1:
             self.toggle_contacts()
 
-        self.focus_position = 'body'
         self._wcontext.set_focus(0)
-        self.current_focus = 'contacts'
 
     def focus_chat(self):
-        self.focus_position = 'body'
         self._wcontext.set_focus(self.body_pos())
         self._wchat.focus_chat()
-        self.current_focus = 'chat'
 
     def focus_next(self):
         if self.current_focus == 'contacts':
