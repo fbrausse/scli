@@ -1182,6 +1182,19 @@ class State:
 
         urwid.connect_signal(self.signal, 'receive_message', self.on_receive_message)
         urwid.connect_signal(self.signal, 'send_message', self.on_send_message)
+        urwid.connect_signal(self, 'current_contact_changed',
+            lambda old, contact, focus:
+                self.set_program_subtitle(
+                    'Message ' + get_contact_name(contact) if contact else None))
+
+    def set_program_subtitle(self, subtitle):
+        title = 'scli ' + self.cfg.username
+        if subtitle:
+            title += ': ' + subtitle
+        try:
+            self.loop.screen.write('\x1b]2;' + title + '\x07')
+        except AttributeError:
+            pass
 
     def set_current_contact(self, contact, focus=False):
         old = self.current_contact
@@ -1516,6 +1529,7 @@ def main():
     loop = urwid.MainLoop(window, palette=PALETTE)
 
     state.loop = loop
+    state.set_program_subtitle(None)
     state.load_history()
     atexit.register(state.save_history)
 
