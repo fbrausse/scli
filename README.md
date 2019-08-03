@@ -38,6 +38,7 @@ A simple two-paned interface is provided. Left pane contains the contact list an
 - `G` focuses last contact/message.
 - `d` deletes the message from your screen (and from your history, if history is enabled).
 - `i` show a popup that contains detailed information about the message.
+- `u` in contacts list unfocusses the currently active conversation (if any)
 
 ## Commands
 There are some basic commands that you can use. Hit `:` to enter command mode (or simply focus the input line and type `:`).
