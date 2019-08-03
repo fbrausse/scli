@@ -1061,62 +1061,45 @@ class MainWindow(urwid.Frame):
             assert self._wchat.is_focused_input()
             return 'input'
 
-    def toggle_contacts(self):
-        if len(self._wcontext.contents) == 2:
-            if self.current_focus == 'contacts':
-                self.focus_next()
+    @current_focus.setter
+    def current_focus(self, new):
+        self.on_focus_changing(new)
+        body_pos = 0 if len(self._wcontext.contents) == 1 else 1
+        if self.current_focus == new:
+            pass
+        elif new == 'contacts':
+            self._wcontext.set_focus(0)
+        elif new == 'chat':
+            self._wcontext.set_focus(body_pos)
+            self._wchat.focus_chat()
+        elif new == 'input':
+            self._wcontext.set_focus(body_pos)
+            self._wchat.focus_input()
+        else:
+            assert new in ('contacts', 'chat', 'input')
 
+    def on_focus_changing(self, new):
+        is_hidden = len(self._wcontext.contents) == 1
+        can_be_hidden = not new == 'contacts' and self.state.cfg.contacts_autohide
+        if not is_hidden == can_be_hidden:
+            self._toggle_contacts()
+
+    def _toggle_contacts(self):
+        if len(self._wcontext.contents) == 2:
             self._wcontext.contents.clear()
             self._wcontext.contents.append((NiceBox(self._wchat), self._wcontext.options(width_amount=3)))
         else:
             self._wcontext.contents.insert(0, (NiceBox(self._wcontacts), self._wcontext.options(width_amount=1)))
 
-    def body_pos(self):
-        if len(self._wcontext.contents) == 1:
-            return 0
-        return 1
-
-    def focus_input(self, cmd_mode=False, search_mode=False):
-        if self.current_focus == 'contacts' and self.state.cfg.contacts_autohide:
-            self.toggle_contacts()
-
-        self._wcontext.set_focus(self.body_pos())
-        self._wchat.focus_input()
-
-        if cmd_mode:
-            self._wchat._wline.set_edit_text(':')
-            self._wchat._wline.set_edit_pos(1)
-        elif search_mode:
-            self._wchat._wline.set_edit_text('/')
-            self._wchat._wline.set_edit_pos(1)
-
-    def focus_contacts(self):
-        if len(self._wcontext.contents) == 1:
-            self.toggle_contacts()
-
-        self._wcontext.set_focus(0)
-
-    def focus_chat(self):
-        self._wcontext.set_focus(self.body_pos())
-        self._wchat.focus_chat()
+    _focus_order = ['contacts', 'chat', 'input']
 
     def focus_next(self):
-        if self.current_focus == 'contacts':
-            self.focus_chat()
-            if self.state.cfg.contacts_autohide:
-                self.toggle_contacts()
-        elif self.current_focus == 'chat':
-            self.focus_input()
-        elif self.current_focus == 'input':
-            self.focus_contacts()
+        index = self._focus_order.index(self.current_focus)
+        self.current_focus = self._focus_order[(index+1)%len(self._focus_order)]
 
     def focus_prev(self):
-        if self.current_focus == 'contacts':
-            self.focus_input()
-        elif self.current_focus == 'chat':
-            self.focus_contacts()
-        elif self.current_focus == 'input':
-            self.focus_chat()
+        index = self._focus_order.index(self.current_focus)
+        self.current_focus = self._focus_order[(index-1)%len(self._focus_order)]
 
     def show_help_pop_up(self):
         if self.current_focus == 'contacts':
@@ -1129,7 +1112,7 @@ class MainWindow(urwid.Frame):
             self.state.set_status('')
 
         if focus:
-            self.focus_input()
+            self.current_focus = 'input'
 
     def on_status_changed(self, status, data):
         self.set_status(status)
@@ -1142,7 +1125,7 @@ class MainWindow(urwid.Frame):
 
     def on_cfg_changed(self, key, val):
         if key == 'contacts_autohide':
-            self.toggle_contacts()
+            self.on_focus_changing(self.current_focus)
 
     def on_notify_count_changed(self, count):
         self._wnotify_count.set_text(btxt(str(count)))
@@ -1155,9 +1138,13 @@ class MainWindow(urwid.Frame):
         elif key == 'shift tab':
             self.focus_prev()
         elif key == ':':
-            self.focus_input(cmd_mode=True)
+            self.current_focus = 'input'
+            self._wchat._wline.set_edit_text(':')
+            self._wchat._wline.set_edit_pos(1)
         elif key == '/':
-            self.focus_input(search_mode=True)
+            self.current_focus = 'input'
+            self._wchat._wline.set_edit_text('/')
+            self._wchat._wline.set_edit_pos(1)
         elif key == '?':
             self.show_help_pop_up()
 
