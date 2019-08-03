@@ -1034,11 +1034,11 @@ class MainWindow(urwid.Frame):
         self._wstatus = urwid.Text("...")
         self._wnotify_count = urwid.Text("...")
 
-        self._wrapped_contacts = NiceBox(self._wcontacts)
-        self._wrapped_chat = NiceBox(self._wchat)
-        self._widgets = [('weight', 1, self._wrapped_contacts), ('weight', 3, self._wrapped_chat)]
-        self._wcontext = urwid.Columns(widget_list=self._widgets, dividechars=0, focus_column=0)
-        super().__init__(self._wcontext, footer=urwid.Columns([self._wstatus, ('pack', self._wnotify_count)]))
+        self._wcontext = urwid.Columns([('weight', 1, NiceBox(self._wcontacts)),
+                                        ('weight', 3, NiceBox(self._wchat))],
+                                       dividechars=0, focus_column=0)
+        super().__init__(self._wcontext,
+                         footer=urwid.Columns([self._wstatus, ('pack', self._wnotify_count)]))
 
         # signals
         urwid.connect_signal(self.state, 'current_contact_changed', self.on_current_contact_changed)
@@ -1057,9 +1057,9 @@ class MainWindow(urwid.Frame):
                 self.focus_next()
 
             self._wcontext.contents.clear()
-            self._wcontext.contents.append((self._wrapped_chat, self._wcontext.options(width_amount=3)))
+            self._wcontext.contents.append((NiceBox(self._wchat), self._wcontext.options(width_amount=3)))
         else:
-            self._wcontext.contents.insert(0, (self._wrapped_contacts, self._wcontext.options(width_amount=1)))
+            self._wcontext.contents.insert(0, (NiceBox(self._wcontacts), self._wcontext.options(width_amount=1)))
 
     def body_pos(self):
         if len(self._wcontext.contents) == 1:
