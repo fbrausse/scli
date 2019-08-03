@@ -1179,7 +1179,9 @@ class State:
                     'Message ' + get_contact_name(contact) if contact else None))
 
     def set_program_subtitle(self, subtitle):
-        title = 'scli ' + self.cfg.username
+        my_contacts = list(filter(lambda x: x.get('number') == self.cfg.username, self.signal.contacts()))
+        my_name = get_contact_name(my_contacts[0]) if len(my_contacts) == 1 else self.cfg.username
+        title = 'scli ' + my_name
         if subtitle:
             title += ': ' + subtitle
         try:
