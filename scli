@@ -756,12 +756,13 @@ class ContactsWindow(VimListBox):
             w.original_widget.set_text(get_contact_name(w.contact))
 
     def on_current_contact_changed(self, _old, _current, _focus=False):
-        self.set_contact_notify_count(self.focus, 0)
+        if _current:
+            self.set_contact_notify_count(self.focus, 0)
         if _old != _current:
             for w in self.body:
                 if w.contact == _old:
                     w.set_attr_map({})
-                elif w.contact == _current:
+                elif _current and w.contact == _current:
                     w.set_attr_map({None: 'selected'})
 
     def on_receive_message(self, envelope):
@@ -931,22 +932,26 @@ class ChatWindow(urwid.Frame):
         self._wline.set_edit_text(txt)
 
     def set_title(self, contact):
-        num = contact.get("number")
-        if not num:
-            num = ', '.join([get_contact_name(self.state.signal.get_contact(number)) for number in contact['members']])
+        if contact:
+            num = contact.get("number")
+            if not num:
+                num = ', '.join([get_contact_name(self.state.signal.get_contact(number)) for number in contact['members']])
 
-        self._wtitle.set_text([('bold', get_contact_name(contact)), ' (', num, ')'])
+            self._wtitle.set_text([('bold', get_contact_name(contact)), ' (', num, ')'])
+        else:
+            self._wtitle.set_text('')
 
     def on_current_contact_changed(self, old, current, focus=False):
         self.state.backup_chat(old)
         self.state.clear_current_chat()
         self.set_title(current)
 
-        chat = self.state.chats.get(hash_contact(current))
-        if chat:
-            self.state.current_chat.extend(chat)
+        if current:
+            chat = self.state.chats.get(hash_contact(current))
+            if chat:
+                self.state.current_chat.extend(chat)
 
-        self.focus_chatlast()
+            self.focus_chatlast()
 
     def get_current_envelope(self):
         try:
