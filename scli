@@ -840,7 +840,7 @@ class ContactsWindow(VimListBox):
 # ChatWindow
 # #############################################################################
 
-class ChatWindow(urwid.Frame):
+class ChatWindow(urwid.Pile):
     def __init__(self, state):
         self.state = state
         self.pop_up_action = None
@@ -851,18 +851,14 @@ class ChatWindow(urwid.Frame):
         self._wsearch = urwid.ListBox(self.search_list)
         self._wtitle = urwid.Text('')
         self._wline = urwid.Edit(('bold', '> '))
-        self._wdiv = urwid.Divider('-')
         self._wlist = VimListBox(self.state.current_chat)
 
         self._w = urwid.WidgetPlaceholder(self._wlist)
-        wcontext = urwid.Frame(self._w,
-                              header=urwid.Divider('-'))
-        self._wcontext = urwid.Frame(wcontext,
-                                     header=self._wtitle,
-                                     footer=self._wdiv)
-
-        super().__init__(self._wcontext,
-                         footer=self._wline)
+        super().__init__([('pack'    , self._wtitle),
+                          (1         , urwid.SolidFill('-')),
+                          ('weight',1, self._w),
+                          (1         , urwid.SolidFill('-')),
+                          ('pack'    , self._wline)])
 
         urwid.connect_signal(self._wline, 'postchange', self.on_edit_text_changed)
         urwid.connect_signal(self.state, 'current_contact_changed', self.on_current_contact_changed)
@@ -921,16 +917,16 @@ class ChatWindow(urwid.Frame):
         self.focus_chatlast()
 
     def is_focused_input(self):
-        return self.focus_position == 'footer'
+        return self.focus_position == 4
 
     def is_focused_chat(self):
-        return self.focus_position == 'body'
+        return self.focus_position == 2
 
     def focus_input(self):
-        self.focus_position = 'footer'
+        self.focus_position = 4
 
     def focus_chat(self):
-        self.focus_position = 'body'
+        self.focus_position = 2
 
     def focus_chatfirst(self):
         self._w.original_widget.focus_first()
