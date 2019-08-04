@@ -937,6 +937,7 @@ class ChatWindow(urwid.Frame):
 
     def set_edit_text(self, txt):
         self._wline.set_edit_text(txt)
+        self._wline.set_edit_pos(len(txt))
 
     def set_title(self, contact):
         if contact:
@@ -1137,14 +1138,9 @@ class MainWindow(urwid.Frame):
             self.focus_next()
         elif key == 'shift tab':
             self.focus_prev()
-        elif key == ':':
+        elif key in (':', '/'):
             self.current_focus = 'input'
-            self._wchat._wline.set_edit_text(':')
-            self._wchat._wline.set_edit_pos(1)
-        elif key == '/':
-            self.current_focus = 'input'
-            self._wchat._wline.set_edit_text('/')
-            self._wchat._wline.set_edit_pos(1)
+            self._wchat.set_edit_text(key)
         elif key == '?':
             self.show_help_pop_up()
 
