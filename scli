@@ -117,9 +117,9 @@ def mk_call(cmd, rmap=None, disown=False, use_pipe=True):
         logging.info('mk_call:%s', cmd)
         try:
             if pipe.returncode == 0:
-                logging.info('mk_call:exit_0:%s', out.decode('utf-8'))
+                logging.info('mk_call:exit_0:%s:%s', cmd, out.decode('utf-8'))
             else:
-                logging.critical('mk_call:exit_%d:%s', pipe.returncode, err.decode('utf-8'))
+                logging.critical('mk_call:exit_%d:%s:%s', pipe.returncode, cmd, err.decode('utf-8'))
         except AttributeError:
             pass
 
