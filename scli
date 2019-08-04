@@ -813,20 +813,26 @@ class ContactsWindow(VimListBox):
             am.notify_count = 0
             return am
 
-        pre_focus = self.focus
-        self.body[:] = [mk_contact(x) for x in get_all_contacts(self.state.signal)]
+        pre_focus = None
         try:
-            if pre_focus:
-                self.focus = pre_focus
-            else:
-                self.focus_first()
-        except IndexError:
+            pre_focus = self.focus.contact
+        except AttributeError:
             pass
+        self.body[:] = [mk_contact(x) for x in get_all_contacts(self.state.signal)]
+        if not pre_focus:
+            self.focus_first()
+        else:
+            try:
+                self.focus_position = map   (lambda n, am: n,
+                                      filter(lambda n, am: am.contact == pre_focus,
+                                      enumerate(self.body)))[0]
+            except IndexError:
+                self.focus_first()
 
     def keypress(self, size, key):
         key = super().keypress(size, key)
         if key == 'u':
-            self.state.set_current_contact(None, key == 'enter')
+            self.state.set_current_contact(None, False)
             key = None
         return key
 
