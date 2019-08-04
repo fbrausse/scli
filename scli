@@ -1526,10 +1526,13 @@ def main():
 
     if not cfg.no_daemon:
         proc = state.signal.start_daemon(loop)
-        atexit.register(proc.kill)
+        def kill_wait():
+            proc.terminate()
+            proc.wait()
+            return
+        atexit.register(kill_wait)
 
     loop.run()
-    proc.kill()
 
 if __name__ == "__main__":
     main()
