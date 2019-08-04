@@ -412,12 +412,10 @@ class MessageInfo(VimListBox):
         return key
 
 
-class HelpDialog(urwid.ListBox):
+class HelpDialog(VimListBox):
     def __init__(self):
-        items = []
-        items.append(urwid.Text(btxt("Keybindings")))
-        items.append(urwid.Text(btxt("Commands")))
-        super().__init__(urwid.SimpleFocusListWalker(items))
+        super().__init__([urwid.Text(btxt("Keybindings")),
+                          urwid.Text(btxt("Commands"))])
 
 # #############################################################################
 # clipboard
@@ -1001,10 +999,6 @@ class ChatWindow(urwid.Pile):
     def get_edit_text(self):
         return self._wline.get_edit_text()
 
-    def set_edit_text(self, txt):
-        self._wline.set_edit_text(txt)
-        self._wline.set_edit_pos(len(txt))
-
     def set_title(self, contact):
         if contact:
             num = contact.get("number")
@@ -1058,7 +1052,7 @@ class ChatWindow(urwid.Pile):
             if key in ('enter', 'l'):
                 if self.search_mode:
                     real_index = self.search_list[self._wsearch.focus_position].real_index
-                    self.set_edit_text('')
+                    self._wline.set_edit_text(txt)
                     self._wlist.focus_position = real_index
                 else:
                     self.state.commands.open_attach(envelope) or self.state.commands.open_url(envelope)
