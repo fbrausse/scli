@@ -54,6 +54,17 @@ PALETTE = [('normal', '', ''),
            ('reversed', 'standout', ''),
            ('selected', 'bold', '')]
 
+PALETTE_NO_ITALICS = [
+           ('normal', '', ''),
+           ('box_normal', '', ''),
+           ('box_focused', 'dark blue', ''),
+           ('bold', 'bold', ''),
+           ('italic', 'bold', ''),
+           ('strikethrough', 'strikethrough', ''),
+           ('bolditalic', 'bold', ''),
+           ('reversed', 'standout', ''),
+           ('selected', 'bold', '')]
+
 LIST_FOCUS_MAP = { None: 'reversed',
                    'normal': 'reversed',
                    'bold'  : 'reversed',
@@ -1523,6 +1534,11 @@ def main():
                         action='store_true',
                         help='Not really useful.')
 
+    parser.add_argument('--no-italics',
+                        default=False,
+                        action='store_true',
+                        help="don't use italics fonts (some fonts don't have those glyphs)")
+
     parser.add_argument('--debug',
                         default=False,
                         action='store_true')
@@ -1573,6 +1589,14 @@ def main():
             for u in ulist:
                 print("\tscli --username=" + u, file=sys.stderr)
             sys.exit(1)
+
+    if cfg.no_italics:
+        global PALETTE
+        global ibtxt
+        global itxt
+        PALETTE = PALETTE_NO_ITALICS
+        ibtxt = lambda txt: ('bold', txt)
+        itxt = lambda txt: ('bold', txt)
 
     state = State(ObservableConfig(cfg))
     window = MainWindow(state)
