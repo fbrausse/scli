@@ -1241,7 +1241,7 @@ class State:
     def send_message(self, message, attachments=None):
         if not self.current_contact:
             self.set_error('error: no contact selected, cannot send message')
-        elif message:
+        elif message or attachments:
             self.signal.send_message(self.current_contact, message, attachments)
 
     def set_program_subtitle(self, subtitle):
