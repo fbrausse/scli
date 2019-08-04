@@ -521,8 +521,7 @@ class Commands:
 
         with open(msg_file_path, 'r') as msg_file:
             msg = msg_file.read().strip()
-            if msg:
-                self.state.signal.send_message(self.state.current_contact, msg)
+            self.state.send_message(msg)
 
     def open_file(self, path):
         if os.path.exists(path):
@@ -543,14 +542,14 @@ class Commands:
             self.state.set_error('File does not exist: ' + attachment)
             return
 
-        self.state.signal.send_message(self.state.current_contact, message, [attachment])
+        self.state.send_message(message, [attachment])
 
     def attach_clip(self, args):
         files = clip.files(self.state)
         message = ' '.join(args)
 
         if files:
-            self.state.signal.send_message(self.state.current_contact, message, files)
+            self.state.send_message(message, files)
         else:
             self.state.set_notification('Clipboard is empty.')
 
@@ -1047,8 +1046,8 @@ class ChatWindow(urwid.Pile):
                 pass
         elif mode == '/':
             pass
-        elif txt.strip(' ') != '' and self.state.current_contact:
-            self.state.signal.send_message(self.state.current_contact, txt)
+        elif txt.strip(' ') != '':
+            self.state.send_message(txt)
 
     def keypress(self, size, key):
         key = super().keypress(size, key)
@@ -1238,6 +1237,12 @@ class State:
             lambda old, contact, focus:
                 self.set_program_subtitle(
                     'Message ' + get_contact_name(contact) if contact else None))
+
+    def send_message(self, message, attachments=None):
+        if not self.current_contact:
+            self.set_error('error: no contact selected, cannot send message')
+        elif message:
+            self.signal.send_message(self.current_contact, message, attachments)
 
     def set_program_subtitle(self, subtitle):
         my_contacts = list(filter(lambda x: x.get('number') == self.cfg.username, self.signal.contacts()))
