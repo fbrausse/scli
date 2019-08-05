@@ -263,6 +263,21 @@ def get_attachment_path(attachment):
 # ui utility
 # #############################################################################
 
+# related: https://github.com/urwid/urwid/pull/154
+def update_focus(command, order):
+    try:
+        deltas = {'next selectable': +1, 'prev selectable': -1}
+        delta = deltas[command]
+        for k, v in enumerate(order):
+            if all([x.focus_position == v[x] for x in v]):
+                pos = order[(k+delta)%len(order)]
+                for x in pos:
+                    x.focus_position = pos[x]
+                return True
+    except KeyError:
+        pass
+    return False
+
 class FocusableText(urwid.AttrMap):
     def __init__(self, markup, keypress = lambda size, key : key, **kwargs):
         text = urwid.Text(markup, **kwargs)
@@ -913,38 +928,35 @@ class ChatWindow(urwid.Pile):
 
                 self._buttons = buttons
                 if buttons:
-                    btn_ok = urwid.Button('OK')
-                    btn_cancel = urwid.Button('Cancel')
+                    btn_ok = urwid.Button('OK', self.close, True)
+                    btn_cancel = urwid.Button('Cancel', self.close, False)
                     self.buttons_grid = urwid.GridFlow([btn_ok, btn_cancel],
                                                         10, 1, 1,
                                                         ('relative', 100))
-                    super().__init__(urwid.Frame(widget, footer=self.buttons_grid))
+                    super().__init__(urwid.Pile([widget, urwid.Filler(self.buttons_grid)]))
+                    w = self.original_widget
+                    b = self.buttons_grid
+                    self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
                     super().__init__(widget)
 
+            def close(self, btn=None, status=False):
+                result = None
+                if status:
+                    result = self._widget.result
+                self._emit('closed', status, result)
+
             def keypress(self, size, key):
-                if self._buttons:
-                    if key == 'tab':
-                        if self.original_widget.focus_position == 'footer':
-                            if self.buttons_grid.focus_position == 0:
-                                self.buttons_grid.focus_position = 1
-                            else:
-                                self.original_widget.focus_position = 'body'
-                        else:
-                            self.buttons_grid.focus_position = 0
-                            self.original_widget.focus_position = 'footer'
-                    # I'm not sure why I need to do this:
-                    elif self.original_widget.focus_position == 'body':
-                        self.original_widget.keypress(size, key)
-                    elif key == 'enter':
-                        if self.buttons_grid.focus_position == 0:
-                            self._emit('closed', True, self._widget.result)
-                        else:
-                            self._emit('closed', False, None)
-                        self._emit('closed', False, None)
+                key = super().keypress(size, key)
+
+                if self._buttons and update_focus(self._command_map[key], self._order):
+                    return None
 
                 if key == 'q':
-                    self._emit('closed', False, None)
+                    self.close()
+                    return None
+
+                return key
 
         wrapper = PopUpWrapper(widget)
         urwid.connect_signal(wrapper, 'closed', on_pop_up_closed)
@@ -1122,8 +1134,8 @@ class MainWindow(urwid.Frame):
         self._wstatus.set_text(txt)
 
     @property
-    def current_focus(self):
-        assert self.focus_position == 'body'
+    def focus_position(self):
+        #assert self.focus_position == 'body' # XXX: how not to recurse?
         if len(self._wcontext.contents) == 2 and self._wcontext.focus_position == 0:
             return 'contacts'
         elif self._wchat.is_focused_chat():
@@ -1132,11 +1144,11 @@ class MainWindow(urwid.Frame):
             assert self._wchat.is_focused_input()
             return 'input'
 
-    @current_focus.setter
-    def current_focus(self, new):
+    @focus_position.setter
+    def focus_position(self, new):
         self.on_focus_changing(new)
         body_pos = 0 if len(self._wcontext.contents) == 1 else 1
-        if self.current_focus == new:
+        if self.focus_position == new:
             pass
         elif new == 'contacts':
             self._wcontext.set_focus(0)
@@ -1166,32 +1178,19 @@ class MainWindow(urwid.Frame):
                 (MainWindow.NiceBox(self._wcontacts),
                  self._wcontext.options(width_amount=1)))
 
-    _focus_order = ['contacts', 'chat', 'input']
-
-    def focus_next(self):
-        index = self._focus_order.index(self.current_focus)
-        self.current_focus = self._focus_order[(index+1)%len(self._focus_order)]
-
-    def focus_prev(self):
-        index = self._focus_order.index(self.current_focus)
-        self.current_focus = self._focus_order[(index-1)%len(self._focus_order)]
-
     def show_help_pop_up(self):
         class HelpDialog(VimListBox):
             def __init__(self):
                 super().__init__([urwid.Text(btxt("Keybindings")),
                                   urwid.Text(btxt("Commands"))])
-        if self.current_focus == 'contacts':
-            self._wchat.show_pop_up(HelpDialog())
-        elif self.current_focus == 'chat':
-            self._wchat.show_pop_up(HelpDialog())
+        self._wchat.show_pop_up(HelpDialog())
 
     def on_current_contact_changed(self, old, current, focus=False):
         if self.state.status_data is self.state.current_contact:
             self.state.set_status('')
 
         if focus:
-            self.current_focus = 'input'
+            self.focus_position = 'input'
 
     def on_status_changed(self, status, data):
         self.set_status(status)
@@ -1204,7 +1203,7 @@ class MainWindow(urwid.Frame):
 
     def on_cfg_changed(self, key, val):
         if key == 'contacts_autohide':
-            self.on_focus_changing(self.current_focus)
+            self.on_focus_changing(self.focus_position)
 
     def on_notify_count_changed(self, count):
         self._wnotify_count.set_text(btxt(str(count)))
@@ -1212,17 +1211,18 @@ class MainWindow(urwid.Frame):
     def keypress(self, size, key):
         key = super().keypress(size, key)
 
-        if key == 'tab':
-            self.focus_next()
-        elif key == 'shift tab':
-            self.focus_prev()
-        elif key in (':', '/'):
-            self.current_focus = 'input'
+        if key in (':', '/'):
+            self.focus_position = 'input'
             self._wchat._wline.mode = key
         elif key == '?':
             self.show_help_pop_up()
+        elif update_focus(self._command_map[key],
+                          [{self: x} for x in ['contacts', 'chat', 'input']]):
+            pass
+        else:
+            return key
 
-        return key
+        return None
 
 # #############################################################################
 # state
