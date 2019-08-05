@@ -774,6 +774,8 @@ class ChatWindow(urwid.Pile):
             self._mode = None
             self._mode_map = mode_map
             super().__init__(self._mode_map[self._mode], multiline=True)
+            self._command_map['meta left'] = 'word left'
+            self._command_map['meta right'] = 'word right'
 
         @property
         def mode(self):
@@ -812,7 +814,30 @@ class ChatWindow(urwid.Pile):
                 self.mode = mode
                 return None
 
-            return super().keypress(size, key)
+            key = super().keypress(size, key)
+
+            space = (' ', '\t', '\n')
+            def char(delta):
+                if 0 <= self.edit_pos+delta < len(self.edit_text):
+                    return self.edit_text[self.edit_pos+delta]
+                return None
+            if self._command_map[key] == 'word left':
+                if self.edit_pos > 0:
+                    while char(-1) in space:
+                        self.edit_pos = self.edit_pos - 1
+                    while char(-1) and char(-1) not in space:
+                        self.edit_pos = self.edit_pos - 1
+                    return None
+            elif self._command_map[key] == 'word right':
+                if self.edit_pos < len(self.edit_text):
+                    self.edit_pos = self.edit_pos + 1
+                    while char(0) and char(0) not in space:
+                        self.edit_pos = self.edit_pos + 1
+                    while char(0) in space:
+                        self.edit_pos = self.edit_pos + 1
+                    return None
+
+            return key
 
 
     class MessageInfo(VimListBox):
