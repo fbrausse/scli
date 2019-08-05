@@ -988,7 +988,9 @@ class ChatWindow(urwid.Pile):
         def setx(i, txt):
             txt.real_index = i
             return txt
-        found = [setx(i, txt) for i, txt in enumerate(self.state.current_chat) if search_txt in txt.original_widget.text]
+        found = [setx(i, txt)
+                 for i, txt in enumerate(self.state.current_chat)
+                 if search_txt in txt.original_widget.text]
         self.search_list.clear()
         self.search_list.extend(found)
 
@@ -1020,7 +1022,9 @@ class ChatWindow(urwid.Pile):
         if contact:
             num = contact.get("number")
             if not num:
-                num = ', '.join([get_contact_name(self.state.signal.get_contact(number)) for number in contact['members']])
+                num = ', '.join([
+                    get_contact_name(self.state.signal.get_contact(number))
+                    for number in contact['members']])
 
             self._wtitle.set_text([('bold', get_contact_name(contact)), ' (', num, ')'])
         else:
@@ -1078,7 +1082,7 @@ class ChatWindow(urwid.Pile):
             elif key == 'y':
                 txt = get_envelope_msg(envelope)
                 clip.put(self.state, txt)
-            elif key == 'd':
+            elif key in ('d', 'delete'):
                 if self.search_mode:
                     item = self.search_list[self._wsearch.focus_position]
                     real_index = item.real_index
