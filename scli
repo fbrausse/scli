@@ -311,123 +311,6 @@ class VimListBox(urwid.ListBox):
         return key
 
 
-class NiceBox(urwid.AttrMap):
-    def __init__(self, w, title=''):
-        box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'), title_align='center', title=title), 'box_normal')
-        super().__init__(box, None, focus_map={'box_normal':'box_focused'})
-
-
-class PopUpWrapper(urwid.LineBox):
-    signals = ['closed']
-
-    def __init__(self, widget, buttons=True):
-        self._widget = widget
-        self._widget.result = None
-
-        self._buttons = buttons
-        if buttons:
-            btn_ok = urwid.Button('OK')
-            btn_cancel = urwid.Button('Cancel')
-            self.buttons_grid = urwid.GridFlow([btn_ok, btn_cancel],
-                                                10, 1, 1,
-                                                ('relative', 100))
-            super().__init__(urwid.Frame(widget, footer=self.buttons_grid))
-        else:
-            super().__init__(widget)
-
-    def keypress(self, size, key):
-        if self._buttons:
-            if key == 'tab':
-                if self.original_widget.focus_position == 'footer':
-                    if self.buttons_grid.focus_position == 0:
-                        self.buttons_grid.focus_position = 1
-                    else:
-                        self.original_widget.focus_position = 'body'
-                else:
-                    self.buttons_grid.focus_position = 0
-                    self.original_widget.focus_position = 'footer'
-            # I'm not sure why I need to do this:
-            elif self.original_widget.focus_position == 'body':
-                self.original_widget.keypress(size, key)
-            elif key == 'enter':
-                if self.buttons_grid.focus_position == 0:
-                    self._emit('closed', True, self._widget.result)
-                else:
-                    self._emit('closed', False, None)
-                self._emit('closed', False, None)
-
-        if key == 'q':
-            self._emit('closed', False, None)
-
-
-class MessageInfo(VimListBox):
-    def __init__(self, state, envelope):
-        self.state = state
-
-        source = envelope['source']
-        msg = get_envelope_msg(envelope)
-        date = None
-        try:
-            date = datetime.utcfromtimestamp(envelope['timestamp'])
-        except ValueError:
-            date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
-        date = date.strftime('%H:%M (%Y-%m-%d)')
-
-        txt_name = FocusableText([btxt('Name   : '),
-                                  ntxt(get_contact_name(state.signal.get_contact(source)))])
-        txt_source = FocusableText([btxt('Number : '),
-                                    ntxt(source)])
-        txt_date = FocusableText([btxt('Date   : '),
-                                  ntxt(date)])
-        txt_msg = FocusableText([btxt('Message: '),
-                                 ntxt(msg)])
-        txt_urls = FocusableText([btxt('Links')], align='center')
-
-        urls = []
-        for url in get_urls(msg):
-            txt_url = FocusableText([ntxt(url)])
-            txt_url.full_path = url
-            urls.append(txt_url)
-
-        txt_atchs = FocusableText(btxt('Attachments'), align='center')
-
-        atchs = []
-        for atch in get_envelope_attachments(envelope):
-            txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
-            txt_atch.original_widget.full_path = get_attachment_path(atch)
-            atchs.append(txt_atch)
-
-
-        items = [txt_name, txt_source, txt_date, txt_msg, txt_urls, *urls, txt_atchs, *atchs]
-        super().__init__(urwid.SimpleFocusListWalker(items))
-
-    def keypress(self, size, key):
-        item = self.body[self.focus_position].original_widget
-        key = super().keypress(size, key)
-        if key == 'y':
-            text, _ = item.get_text()
-            key = None
-            try:
-                clip.put(self.state, item.full_path)
-            except AttributeError:
-                try:
-                    clip.put(self.state, text.split(": ")[1])
-                except IndexError:
-                    clip.put(self.state, text)
-        elif key in ('enter', 'o'):
-            key = None
-            try:
-                self.state.commands.open_file(item.full_path)
-            except (AttributeError, TypeError):
-                pass
-        return key
-
-
-class HelpDialog(VimListBox):
-    def __init__(self):
-        super().__init__([urwid.Text(btxt("Keybindings")),
-                          urwid.Text(btxt("Commands"))])
-
 # #############################################################################
 # clipboard
 # #############################################################################
@@ -911,6 +794,70 @@ class ChatWindow(urwid.Pile):
 
             return super().keypress(size, key)
 
+
+    class MessageInfo(VimListBox):
+        def __init__(self, state, envelope):
+            self.state = state
+
+            source = envelope['source']
+            msg = get_envelope_msg(envelope)
+            date = None
+            try:
+                date = datetime.utcfromtimestamp(envelope['timestamp'])
+            except ValueError:
+                date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
+            date = date.strftime('%H:%M (%Y-%m-%d)')
+
+            txt_name = FocusableText([btxt('Name   : '),
+                                      ntxt(get_contact_name(state.signal.get_contact(source)))])
+            txt_source = FocusableText([btxt('Number : '),
+                                        ntxt(source)])
+            txt_date = FocusableText([btxt('Date   : '),
+                                      ntxt(date)])
+            txt_msg = FocusableText([btxt('Message: '),
+                                     ntxt(msg)])
+            txt_urls = FocusableText([btxt('Links')], align='center')
+
+            urls = []
+            for url in get_urls(msg):
+                txt_url = FocusableText([ntxt(url)])
+                txt_url.full_path = url
+                urls.append(txt_url)
+
+            txt_atchs = FocusableText(btxt('Attachments'), align='center')
+
+            atchs = []
+            for atch in get_envelope_attachments(envelope):
+                txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
+                txt_atch.original_widget.full_path = get_attachment_path(atch)
+                atchs.append(txt_atch)
+
+
+            items = [txt_name, txt_source, txt_date, txt_msg, txt_urls, *urls, txt_atchs, *atchs]
+            super().__init__(urwid.SimpleFocusListWalker(items))
+
+        def keypress(self, size, key):
+            item = self.body[self.focus_position].original_widget
+            key = super().keypress(size, key)
+            if key == 'y':
+                text, _ = item.get_text()
+                key = None
+                try:
+                    clip.put(self.state, item.full_path)
+                except AttributeError:
+                    try:
+                        clip.put(self.state, text.split(": ")[1])
+                    except IndexError:
+                        clip.put(self.state, text)
+            elif key in ('enter', 'o'):
+                key = None
+                try:
+                    self.state.commands.open_file(item.full_path)
+                except (AttributeError, TypeError):
+                    pass
+            return key
+
+
     def __init__(self, state):
         self.state = state
         self.pop_up_action = None
@@ -951,6 +898,48 @@ class ChatWindow(urwid.Pile):
         def on_pop_up_closed(sender, accepted, result):
             self._w.original_widget = org
             urwid.emit_signal(self.state, 'dialog_finished', accepted, result)
+
+        class PopUpWrapper(urwid.LineBox):
+            signals = ['closed']
+
+            def __init__(self, widget, buttons=True):
+                self._widget = widget
+                self._widget.result = None
+
+                self._buttons = buttons
+                if buttons:
+                    btn_ok = urwid.Button('OK')
+                    btn_cancel = urwid.Button('Cancel')
+                    self.buttons_grid = urwid.GridFlow([btn_ok, btn_cancel],
+                                                        10, 1, 1,
+                                                        ('relative', 100))
+                    super().__init__(urwid.Frame(widget, footer=self.buttons_grid))
+                else:
+                    super().__init__(widget)
+
+            def keypress(self, size, key):
+                if self._buttons:
+                    if key == 'tab':
+                        if self.original_widget.focus_position == 'footer':
+                            if self.buttons_grid.focus_position == 0:
+                                self.buttons_grid.focus_position = 1
+                            else:
+                                self.original_widget.focus_position = 'body'
+                        else:
+                            self.buttons_grid.focus_position = 0
+                            self.original_widget.focus_position = 'footer'
+                    # I'm not sure why I need to do this:
+                    elif self.original_widget.focus_position == 'body':
+                        self.original_widget.keypress(size, key)
+                    elif key == 'enter':
+                        if self.buttons_grid.focus_position == 0:
+                            self._emit('closed', True, self._widget.result)
+                        else:
+                            self._emit('closed', False, None)
+                        self._emit('closed', False, None)
+
+                if key == 'q':
+                    self._emit('closed', False, None)
 
         wrapper = PopUpWrapper(widget)
         urwid.connect_signal(wrapper, 'closed', on_pop_up_closed)
@@ -1081,7 +1070,7 @@ class ChatWindow(urwid.Pile):
                 else:
                     del self.state.current_chat[self._wlist.focus_position]
             elif key == 'i':
-                self.show_pop_up(MessageInfo(self.state, envelope))
+                self.show_pop_up(ChatWindow.MessageInfo(self.state, envelope))
             elif key == 'q':
                 # TODO: quote (https://github.com/AsamK/signal-cli/issues/151)
                 pass
@@ -1094,6 +1083,13 @@ urwid.register_signal(ChatWindow.Editor, ChatWindow.Editor.signals)
 # #############################################################################
 
 class MainWindow(urwid.Frame):
+
+    class NiceBox(urwid.AttrMap):
+        def __init__(self, w, title=''):
+            box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'), title_align='center', title=title), 'box_normal')
+            super().__init__(box, None, focus_map={'box_normal':'box_focused'})
+
+
     def __init__(self, state):
         self.state = state
 
@@ -1103,8 +1099,8 @@ class MainWindow(urwid.Frame):
         self._wstatus = urwid.Text("...")
         self._wnotify_count = urwid.Text("...")
 
-        self._wcontext = urwid.Columns([('weight', 1, NiceBox(self._wcontacts)),
-                                        ('weight', 3, NiceBox(self._wchat))],
+        self._wcontext = urwid.Columns([('weight', 1, MainWindow.NiceBox(self._wcontacts)),
+                                        ('weight', 3, MainWindow.NiceBox(self._wchat))],
                                        dividechars=0, focus_column=0)
         super().__init__(self._wcontext,
                          footer=urwid.Columns([self._wstatus, ('pack', self._wnotify_count)]))
@@ -1157,9 +1153,13 @@ class MainWindow(urwid.Frame):
     def _toggle_contacts(self):
         if len(self._wcontext.contents) == 2:
             self._wcontext.contents.clear()
-            self._wcontext.contents.append((NiceBox(self._wchat), self._wcontext.options(width_amount=3)))
+            self._wcontext.contents.append(
+                (MainWindow.NiceBox(self._wchat),
+                 self._wcontext.options(width_amount=3)))
         else:
-            self._wcontext.contents.insert(0, (NiceBox(self._wcontacts), self._wcontext.options(width_amount=1)))
+            self._wcontext.contents.insert(0,
+                (MainWindow.NiceBox(self._wcontacts),
+                 self._wcontext.options(width_amount=1)))
 
     _focus_order = ['contacts', 'chat', 'input']
 
@@ -1172,6 +1172,10 @@ class MainWindow(urwid.Frame):
         self.current_focus = self._focus_order[(index-1)%len(self._focus_order)]
 
     def show_help_pop_up(self):
+        class HelpDialog(VimListBox):
+            def __init__(self):
+                super().__init__([urwid.Text(btxt("Keybindings")),
+                                  urwid.Text(btxt("Commands"))])
         if self.current_focus == 'contacts':
             self._wchat.show_pop_up(HelpDialog())
         elif self.current_focus == 'chat':
@@ -1366,7 +1370,9 @@ class State:
         attachments = get_envelope_attachments(envelope)
 
         if attachments != []:
-            attachments_txt = ', '.join([get_attachment_name(attachment) + ' (' + str(i) + ')' for i, attachment in enumerate(attachments)])
+            attachments_txt = ', '.join([
+                get_attachment_name(attachment) + ' (' + str(i) + ')'
+                for i, attachment in enumerate(attachments)])
             txt.append(ntxt('[attached: ' + attachments_txt + '] '))
 
         txt.append(message)
