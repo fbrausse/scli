@@ -52,7 +52,8 @@ PALETTE = [('normal', '', ''),
            ('strikethrough', 'strikethrough', ''),
            ('bolditalic', 'italics,bold', ''),
            ('reversed', 'standout', ''),
-           ('selected', 'bold', '')]
+           ('selected', 'bold', ''),
+           ('underline', 'underline', '')]
 
 PALETTE_NO_ITALICS = [
            ('normal', '', ''),
@@ -63,7 +64,8 @@ PALETTE_NO_ITALICS = [
            ('strikethrough', 'strikethrough', ''),
            ('bolditalic', 'bold', ''),
            ('reversed', 'standout', ''),
-           ('selected', 'bold', '')]
+           ('selected', 'bold', ''),
+           ('underline', 'underline', '')]
 
 LIST_FOCUS_MAP = { None: 'reversed',
                    'normal': 'reversed',
@@ -72,9 +74,10 @@ LIST_FOCUS_MAP = { None: 'reversed',
                    'strikethrough': 'reversed',
                    'bolditalic': 'reversed'}
 
-FORMAT_MAP = {'_': 'italic',
+FORMAT_MAP = {'/': 'italic',
               '*': 'bold',
-              '~': 'strikethrough'}
+              '~': 'strikethrough',
+              '_': 'underline'}
 
 def ibtxt(txt):
     return ('bolditalic', txt)
@@ -1335,7 +1338,7 @@ class State:
         i, m = 0, []
         while i < len(message):
             c = message[i]
-            if c in ('_', '*', '~'):
+            if c in FORMAT_MAP:
                 try:
                     end = message[i+1:].index(c)
                     sub = message[i+1:i+1+end]
@@ -1515,7 +1518,7 @@ def main():
                         '--use-formatting',
                         default=False,
                         action='store_true',
-                        help='Use _italic_, *bold*, ~strikethrough~ formatting in messages. (Disabled by default.)')
+                        help='Use /italic/, *bold*, ~strikethrough~, _underline_ formatting in messages. (Disabled by default.)')
 
     parser.add_argument('-w',
                         '--wrap-at',
