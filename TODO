@@ -1,0 +1,14 @@
+Current functionality:
+- mk_call performs unsafe command substitution
+- xclip (and its 'selection') is hardcoded outside option-default
+- support signald in addition to signal-cli (only 1 daemon for any number of
+  scli instances on one machine)
+- add (and store?) contacts (and manage groups) not known to signal-cli profile
+  (easy with signald, since it allows manipulation of remote contacts)
+  in order to send messages to and reply to messages from new contacts
+- receive messages from signal-cli via DBUS instead of parsing its stdout?
+- use some DBUS integration into python instead of relying on external tool
+  in order to send files with ',' inside their filenames
+
+New functionality:
+- support other transports (e.g. via spectrum.io)?
