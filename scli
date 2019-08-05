@@ -748,6 +748,10 @@ class ChatWindow(urwid.Pile):
     class Editor(urwid.Edit):
         signals = [urwid.ACTIVATE, 'editor_mode_changed']
 
+        # mode_map is a mapping from 'key' (as in keypress(size, key)) to
+        # a text markup suitable for the caption of an urwid.Edit.
+        # It must include 'None' for the default mode and cannot include 'enter'
+        # as it interferes with the line-break logic.
         def __init__(self, mode_map = {None: ('bold', '> ')}):
             self._mode = None
             self._mode_map = mode_map
@@ -781,16 +785,14 @@ class ChatWindow(urwid.Pile):
                     self.set_edit_text('')
                     return None
 
-            if self.edit_pos == 0:
-                old = self.mode
-                mode = old
-                if key == 'backspace':
-                    mode = None
-                elif not self.mode:
-                    mode = key[0] if len(key) == 1 and key[0] in self._mode_map else None
-                if self.mode != mode:
-                    self.mode = mode
-                    return None
+            mode = self.mode
+            if key == 'esc' or self.edit_pos == 0 and key == 'backspace':
+                mode = None
+            elif self.edit_pos == 0 and not mode and key in self._mode_map:
+                mode = key
+            if self.mode != mode:
+                self.mode = mode
+                return None
 
             return super().keypress(size, key)
 
