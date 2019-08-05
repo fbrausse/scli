@@ -1547,6 +1547,11 @@ def main():
                         action='store_true',
                         help="don't use italics fonts (some fonts don't have those glyphs)")
 
+    parser.add_argument('--no-mouse',
+                        default=False,
+                        action='store_true',
+                        help="disable terminal mouse support")
+
     parser.add_argument('--debug',
                         default=False,
                         action='store_true')
@@ -1609,7 +1614,7 @@ def main():
     state = State(ObservableConfig(cfg))
     window = MainWindow(state)
 
-    loop = urwid.MainLoop(window, palette=PALETTE)
+    loop = urwid.MainLoop(window, palette=PALETTE, handle_mouse=not cfg.no_mouse)
 
     state.loop = loop
     state.set_program_subtitle(None)
