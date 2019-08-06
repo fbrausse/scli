@@ -516,29 +516,27 @@ class Commands:
 # signal
 # #############################################################################
 
-class Signal:
-    signals = ['receive_message', 'send_message']
+class BackgroundProcess:
+    def __init__(self, proc, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._proc = proc
+        atexit.register(self._kill_wait)
 
-    def __init__(self, user):
-        self.user = user
-        self._data = None
+    @property
+    def proc(self):
+        exitcode = self._proc.poll()
+        if exitcode is not None:
+            raise Exception('background process has died already with code ' + str(exitcode))
+        return self._proc
+
+    def _kill_wait(self):
+        self._proc.terminate()
+        self._proc.wait()
+
+class JsonLineReaderMixin:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._buffer = b''
-        self._path = os.path.join(SIGNALCLI_DATA_FOLDER, user)
-
-        if not os.path.exists(self._path):
-            self._path = os.path.join(SIGNALCLI_LEGACY_DATA_FOLDER, user)
-            if not os.path.exists(self._path):
-                raise Exception(self.user + " does not exist!")
-
-        self.reload_data()
-
-    def reload_data(self):
-        with open(self._path) as f:
-            self._data = json.load(f)
-
-    def start_daemon(self, loop):
-        fd = loop.watch_pipe(self.daemon_handler)
-        return Popen(['signal-cli', '-u', self.user, 'daemon', '--json'], stdout=fd, stderr=fd, close_fds=True)
 
     def daemon_handler(self, line):
         line = self._buffer + line
@@ -556,12 +554,26 @@ class Signal:
 
             try:
                 e = json.loads(line)
-                urwid.emit_signal(self, 'receive_message', e['envelope'])
-            except Exception as e:
-                logging.error('input: %s', line)
+                logging.debug('received json line: %s', line)
+                # urwid.emit_signal(self, 'receive_message', e['envelope'])
+                self.json_handler(e)
+            except json.decoder.JSONDecodeError as e:
+                logging.error('daemon_handler: error parsing as JSON: %s', line)
                 logging.exception(e)
                 # TODO: display error to user
                 continue
+        self.proc
+
+class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
+    def __init__(self, user, loop, emit_obj):
+        self.user = user
+        self._emit_obj = emit_obj
+        fd = loop.watch_pipe(self.daemon_handler)
+        super().__init__(Popen(['signal-cli', '-u', user, 'daemon', '--json'],
+                               stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
+
+    def json_handler(self, e):
+        urwid.emit_signal(self._emit_obj, 'receive_message', e['envelope'])
 
     def send_message(self, contact, message="", attachments=None):
         if not attachments:
@@ -610,7 +622,147 @@ class Signal:
                                     'attachments': attachments,
                                     'timestamp': ts}}
 
-        urwid.emit_signal(self, 'send_message', envelope)
+        urwid.emit_signal(self._emit_obj, 'send_message', envelope)
+
+def signalcli_daemon(user, loop, emit_obj):
+    return SignalCLIDaemon(user, loop, emit_obj)
+
+import random
+
+# some code from https://gitlab.com/stavros/pysignald/blob/master/signald/main.py
+class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
+    def __init__(self, user, loop, emit_obj, cmd : list):
+        self.user = user
+        self._emit_obj = emit_obj
+        fd = loop.watch_pipe(self.daemon_handler)
+        super().__init__(Popen(cmd, stdin=PIPE, stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
+        # send messages to self.proc.stdin
+        self.proc.stdin.write(json.dumps({
+            "type": "subscribe",
+            "username": user
+        }).encode("utf8") + b"\n")
+        self.proc.stdin.flush()
+
+    def json_handler(self, message):
+        if message.get("type") != "message" or (
+            not message["data"]["isReceipt"] and message["data"].get("dataMessage") is None
+        ):
+            # If the message type isn't "message", or if it's a weird message whose
+            # purpose I don't know, return. I think the weird message is a typing
+            # notification.
+            logging.warning("can't handle 'weird message': %s", message)
+        else:
+            urwid.emit_signal(self._emit_obj, 'receive_message', message['data'])
+
+    def _get_id(self):
+        "Generate a random ID."
+        return "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(10))
+
+    def _send_command(self, payload: dict):
+        s = self.proc.stdin
+        msg_id = self._get_id()
+        payload["id"] = msg_id
+        logging.debug('SignaldIO._send_command: %s', payload)
+        s.write(json.dumps(payload).encode("utf8") + b"\n")
+        s.flush()
+
+        #if not block:
+        #    return
+        #
+        #response = s.recv(4 * 1024)
+        #for line in response.split(b"\n"):
+        #    if msg_id.encode("utf8") not in line:
+        #        continue
+        #
+        #    data = json.loads(line)
+        #
+        #    if data.get("id") != msg_id:
+        #        continue
+        #
+        #    if data["type"] == "unexpected_error":
+        #        raise ValueError("unexpected error occurred")
+
+    def register(self, voice=False):
+        """
+        Register the given number.
+
+        voice: Whether to receive a voice call or an SMS for verification.
+        """
+        payload = {"type": "register", "username": self.user, "voice": voice}
+        self._send_command(payload)
+
+    def verify(self, code: str):
+        """
+        Verify the given number by entering the code you received.
+
+        code: The code Signal sent you.
+        """
+        payload = {"type": "verify", "username": self.user, "code": code}
+        self._send_command(payload)
+
+    def send_message(self, recipient: str, text: str, attachments = None) -> None:
+        """
+        Send a message.
+
+        recipient: The recipient's phone number, in E.123 format.
+        text:      The text of the message to send.
+        """
+        payload = {
+            "type": "send",
+            "username": self.user,
+            "recipientNumber": recipient['number'],
+            "messageBody": text,
+            "attachments": [{'filename': os.path.abspath(f)} for f in attachments],
+        }
+        self._send_command(payload)
+
+        ts = datetime.now().timestamp()
+        envelope = {'source':self.user,
+                    'target': recipient['number'],
+                    'timestamp': ts,
+                    'dataMessage': {'message': text,
+                                    'attachments': attachments,
+                                    'timestamp': ts}}
+        urwid.emit_signal(self._emit_obj, 'send_message', envelope)
+
+def signald_socat(user, loop, emit_obj, socket_path):
+    return SignaldIO(user, loop, emit_obj, ['socat', 'unix-client:' + socket_path, 'stdio'])
+
+def signald_netcat_openbsd(user, loop, emit_obj, socket_path):
+    return SignaldIO(user, loop, emit_obj, ['nc', '-U', socket_path])
+
+
+class Signal:
+    signals = ['receive_message', 'send_message']
+
+    def __init__(self, user):
+        self.user = user
+        self._data = None
+        self._buffer = b''
+        self._path = os.path.join(SIGNALCLI_DATA_FOLDER, user)
+        self.daemon = None
+
+        if not os.path.exists(self._path):
+            self._path = os.path.join(SIGNALCLI_LEGACY_DATA_FOLDER, user)
+            if not os.path.exists(self._path):
+                raise Exception(self.user + " does not exist!")
+
+        self.reload_data()
+
+    def reload_data(self):
+        with open(self._path) as f:
+            self._data = json.load(f)
+
+    def send_message(self, contact, message="", attachments=None):
+        if not attachments:
+            attachments = []
+
+        attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
+        if not all([os.path.exists(attachment_path) for attachment_path in attachment_paths]):
+            logging.warning('send_message: Attached file(s) does not exist.')
+            return
+
+        self.daemon.send_message(contact, message, attachments)
 
     def contacts(self):
         return list(filter(lambda x: bool(get_contact_name(x).strip(' ')),
@@ -1281,6 +1433,14 @@ class State:
                 self.set_program_subtitle(
                     'Message ' + get_contact_name(contact) if contact else None))
 
+    def start_daemon(self, loop):
+        if not self.cfg.signald:
+            self.signal.daemon = signalcli_daemon(self.cfg.username, loop, self.signal)
+        elif self.cfg.signald == 'socat':
+            self.signal.daemon = signald_socat(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
+        else:
+            self.signal.daemon = signald_netcat_openbsd(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
+
     def send_message(self, message, attachments=None):
         if not self.current_contact:
             self.set_error('error: no contact selected, cannot send message')
@@ -1584,6 +1744,16 @@ def main():
                         action='store_true',
                         help="disable terminal mouse support")
 
+    parser.add_argument('--signald-sock',
+                        default='/var/run/signald/signald.sock',
+                        type=str,
+                        help='path to signald socket')
+
+    parser.add_argument('--signald',
+                        default=None,
+                        type=str,
+                        help="use SIGNALD={socat,netcat} to connect to signald socket instead of spawning signal-cli; please note, that 'netcat' denotes OpenBSD's netcat (must support '-U' for unix domain sockets)")
+
     parser.add_argument('--debug',
                         default=False,
                         action='store_true')
@@ -1611,6 +1781,10 @@ def main():
         logging.basicConfig(filename=SCLI_LOG_FILE, level=logging.DEBUG)
     else:
         logging.basicConfig(filename=SCLI_LOG_FILE, level=logging.CRITICAL)
+
+    if cfg.signald and cfg.signald not in ('socat','netcat'):
+        print("error: SIGNALD must be either 'socat' or 'netcat'", file=sys.stderr)
+        sys.exit(1)
 
     if not cfg.username:
         ulist = []
@@ -1654,12 +1828,7 @@ def main():
     atexit.register(state.save_history)
 
     if not cfg.no_daemon:
-        proc = state.signal.start_daemon(loop)
-        def kill_wait():
-            proc.terminate()
-            proc.wait()
-            return
-        atexit.register(kill_wait)
+        state.start_daemon(loop)
 
     loop.run()
 
