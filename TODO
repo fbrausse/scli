@@ -1,8 +1,10 @@
 Current functionality:
 - mk_call performs unsafe command substitution
 - xclip (and its 'selection') is hardcoded outside option-default
-- support signald in addition to signal-cli (only 1 daemon for any number of
-  scli instances on one machine)
+- signald supports needs an upstream fix for "unsubscribe" to not ACK msgs
+  to Signal server anymore (assuming we're the only client for this user).
+  Otherwise (more robust): find a way to determine where we left off and
+  resume showing messages from that point.
 - add (and store?) contacts (and manage groups) not known to signal-cli profile
   (easy with signald, since it allows manipulation of remote contacts)
   in order to send messages to and reply to messages from new contacts

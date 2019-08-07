@@ -22,21 +22,13 @@ import urwid
 # constants
 # #############################################################################
 
-DATA_FOLDER = os.getenv('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
-CFG_FOLDER = os.getenv('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+DATA_FOLDER = os.getenv('XDG_DATA_HOME'  , os.path.expanduser('~/.local/share'))
+CFG_FOLDER  = os.getenv('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
 
-SIGNALCLI_LEGACY_FOLDER = os.path.join(CFG_FOLDER, 'signal')
-SIGNALCLI_LEGACY_DATA_FOLDER = os.path.join(SIGNALCLI_LEGACY_FOLDER, 'data')
-SIGNALCLI_LEGACY_ATTACHMENT_FOLDER = os.path.join(SIGNALCLI_LEGACY_FOLDER, 'attachments')
-
-SIGNALCLI_FOLDER = os.path.join(DATA_FOLDER, 'signal-cli')
-SIGNALCLI_DATA_FOLDER = os.path.join(SIGNALCLI_FOLDER, 'data')
-SIGNALCLI_ATTACHMENT_FOLDER = os.path.join(SIGNALCLI_FOLDER, 'attachments')
-
-SCLI_DATA_FOLDER = os.path.join(DATA_FOLDER, 'scli')
+SCLI_DATA_FOLDER  = os.path.join(DATA_FOLDER, 'scli')
 SCLI_HISTORY_FILE = os.path.join(SCLI_DATA_FOLDER, 'history')
-SCLI_CFG_FILE = os.path.join(CFG_FOLDER, 'sclirc')
-SCLI_LOG_FILE = os.path.join(SCLI_DATA_FOLDER, 'log')
+SCLI_CFG_FILE     = os.path.join(CFG_FOLDER, 'sclirc')
+SCLI_LOG_FILE     = os.path.join(SCLI_DATA_FOLDER, 'log')
 
 # #############################################################################
 # coloring stuff
@@ -250,14 +242,49 @@ def get_attachment_name(attachment):
     except (KeyError, TypeError):
         return os.path.basename(attachment)
 
-def get_attachment_path(attachment):
+def get_backend_desc(cfg):
+    class SignalCLIlayout:
+        def __init__(self, name, bases):
+            self.base_path = None
+            self.name = name
+            for base in bases:
+                if os.path.exists(base):
+                    self.base_path = base
+                    break
+            if not self.base_path:
+                raise Exception(self.name + ' base directory not found')
+            self.data_path = os.path.join(self.base_path, 'data')
+            self.attachments_path = os.path.join(self.base_path, 'attachments')
+
+        def list_users(self):
+            return [x for x in os.listdir(self.data_path)
+                      if os.path.isfile(os.path.join(self.data_path, x))]
+
+        def user_path(self, user):
+            path = os.path.join(self.data_path, user)
+            if os.path.exists(path):
+                return path
+            raise Exception(user + ' does not exists!')
+
+        def user_data_path(self, user):
+            return os.path.join(self.base_path, user + '.d')
+
+    if cfg.signald:
+        SIGNALD_FOLDER          = os.path.join(CFG_FOLDER, 'signald')
+        return SignalCLIlayout('signald', [SIGNALD_FOLDER])
+    else:
+        SIGNALCLI_FOLDER        = os.path.join(DATA_FOLDER, 'signal-cli')
+        SIGNALCLI_LEGACY_FOLDER = os.path.join(CFG_FOLDER, 'signal')
+        return SignalCLIlayout('signal-cli',
+                               [SIGNALCLI_FOLDER, SIGNALCLI_LEGACY_FOLDER])
+
+def get_attachment_path(cfg, attachment):
     if isinstance(attachment, dict):
-        received_attachment = os.path.join(SIGNALCLI_ATTACHMENT_FOLDER, str(attachment['id']))
-        if not os.path.exists(received_attachment):
-            received_attachment = os.path.join(SIGNALCLI_LEGACY_ATTACHMENT_FOLDER, str(attachment['id']))
-        return received_attachment
-    elif isinstance(attachment, str) and os.path.exists(attachment):
-        return attachment
+        path = os.path.join(get_backend_desc(cfg).attachments_path, str(attachment['id']))
+    elif isinstance(attachment, str):
+        path = attachment
+    if os.path.exists(path):
+        return path
 
 # #############################################################################
 # ui utility
@@ -467,7 +494,7 @@ class Commands:
         result = False
         attachments = get_envelope_attachments(envelope)
         for attachment in attachments:
-            file_path = get_attachment_path(attachment)
+            file_path = get_attachment_path(self.state.cfg, attachment)
             if file_path:
                 self.open_file(file_path)
                 result = True
@@ -628,6 +655,7 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
 def signalcli_daemon(user, loop, emit_obj):
     return SignalCLIDaemon(user, loop, emit_obj)
 
+
 import random
 
 # some code from https://gitlab.com/stavros/pysignald/blob/master/signald/main.py
@@ -744,18 +772,12 @@ def signald_netcat_openbsd(user, loop, emit_obj, socket_path):
 class Signal:
     signals = ['receive_message', 'send_message']
 
-    def __init__(self, user):
+    def __init__(self, be_desc, user):
         self.user = user
         self._data = None
         self._buffer = b''
-        self._path = os.path.join(SIGNALCLI_DATA_FOLDER, user)
+        self._path = be_desc.user_path(user)
         self.daemon = None
-
-        if not os.path.exists(self._path):
-            self._path = os.path.join(SIGNALCLI_LEGACY_DATA_FOLDER, user)
-            if not os.path.exists(self._path):
-                raise Exception(self.user + " does not exist!")
-
         self.reload_data()
 
     def reload_data(self):
@@ -1051,7 +1073,7 @@ class ChatWindow(urwid.Pile):
             atchs = []
             for atch in get_envelope_attachments(envelope):
                 txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
-                txt_atch.original_widget.full_path = get_attachment_path(atch)
+                txt_atch.original_widget.full_path = get_attachment_path(self.state.cfg, atch)
                 atchs.append(txt_atch)
 
 
@@ -1438,7 +1460,7 @@ class State:
     signals = ['current_contact_changed', 'status_changed', 'notification_changed', 'error_changed', 'dialog_requested', 'dialog_finished']
 
     def __init__(self, cfg):
-        self.signal = Signal(cfg.username)
+        self.signal = Signal(get_backend_desc(cfg), cfg.username)
         self.cfg = cfg
         self.chats = {}
         self.error = ''
@@ -1812,16 +1834,7 @@ def main():
         sys.exit(1)
 
     if not cfg.username:
-        ulist = []
-        try:
-            users = [x for x in os.listdir(SIGNALCLI_DATA_FOLDER)
-                     if os.path.isfile(os.path.join(SIGNALCLI_DATA_FOLDER, x))]
-            ulist.extend(users)
-            legacy_users = [x for x in os.listdir(SIGNALCLI_LEGACY_DATA_FOLDER)
-                            if os.path.isfile(os.path.join(SIGNALCLI_LEGACY_DATA_FOLDER, x))]
-            ulist.extend(legacy_users)
-        except FileNotFoundError:
-            pass
+        ulist = get_backend_desc(cfg).list_users()
 
         if not ulist:
             print("Couldn't find any linked device.", file=sys.stderr)
