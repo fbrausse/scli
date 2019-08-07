@@ -407,7 +407,7 @@ class clip:
 
     @staticmethod
     def xput(txt):
-        if not txt:
+        if txt is None:
             return
 
         p = Popen(['xclip', '-selection', 'clipboard'], stdout=PIPE, stderr=PIPE, stdin=PIPE)
