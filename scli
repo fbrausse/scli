@@ -14,6 +14,8 @@ import logging
 import errno
 import textwrap
 import random
+import shlex
+import io
 from subprocess import STDOUT, PIPE, Popen
 from datetime import datetime
 
@@ -454,6 +456,7 @@ class Commands:
                 return
 
     def external_edit(self, args):
+        args = shlex.split(args)
         if args and len(args) == 1 and (args[0].startswith("/") or args[0].startswith("~/")):
             msg_file_path = os.path.expanduser(args[0])
         else:
@@ -471,29 +474,29 @@ class Commands:
             msg = msg_file.read().strip()
             self.state.send_message(msg)
 
-    def open_file(self, path):
+    def open_file(self, path): # TODO: does not belong here
         if os.path.exists(path):
             if isinstance(path, dict):
                 mk_call(self.state.cfg.open_command, path, True)
             mk_call(self.state.cfg.open_command, {'%u': path}, True)
 
-    def attach(self, args):
-        try:
-            args[0]
-        except IndexError:
+    def attach(self, arg):
+        # first argument is a path, treat it like the shell does
+        sio = io.StringIO(arg)
+        lex = shlex.shlex(sio, posix=True)
+        attachment = lex.get_token()
+        message = sio.read()
+        if attachment == lex.eof:
             self.state.set_error(':attach takes at least one argument.')
             return
 
-        message = ' '.join(args[1:])
-        attachment = args[0]
         self.state.send_message(message, [attachment])
 
-    def attach_clip(self, args):
+    def attach_clip(self, arg):
         files = clip.files(self.state)
-        message = ' '.join(args)
 
         if files:
-            self.state.send_message(message, files)
+            self.state.send_message(arg, files)
         else:
             self.state.set_notification('Clipboard is empty.')
 
@@ -508,15 +511,15 @@ class Commands:
 
         return result
 
-    def open_last_attach(self, args):
+    def open_last_attach(self, _):
         for txt in self.state.current_chat[::-1]:
             if self.open_attach(txt.envelope):
                 return
 
-    def open_single_url(self, url):
+    def open_single_url(self, url): # TODO: does not belong here
         mk_call(self.state.cfg.open_command, {'%u': url}, True)
 
-    def open_url(self, envelope):
+    def open_url(self, envelope): # TODO: does not belong here
         txt = get_envelope_msg(envelope)
         urls = get_urls(txt)
         if urls:
@@ -524,12 +527,12 @@ class Commands:
             return True
         return False
 
-    def open_last_url(self, args):
+    def open_last_url(self, _):
         for txt in self.state.current_chat[::-1]:
             if self.open_url(txt.envelope):
                 return
 
-    def toggle_notifications(self, args):
+    def toggle_notifications(self, _):
         self.state.cfg.enable_notifications = not self.state.cfg.enable_notifications
         notif = 'Desktop notifications are '
         if self.state.cfg.enable_notifications:
@@ -538,14 +541,14 @@ class Commands:
             notif = notif + 'OFF'
         self.state.set_notification(notif + '.')
 
-    def toggle_autohide(self, args):
+    def toggle_autohide(self, _):
         self.state.cfg.contacts_autohide = not self.state.cfg.contacts_autohide
 
-    def send_notification(self, sender, message):
+    def send_notification(self, sender, message): # TODO: does not belong here
         if self.state.cfg.enable_notifications:
             mk_call(self.state.cfg.notification_command, {'%s': sender, '%m': message})
 
-    def quit(self, args):
+    def quit(self, _):
         raise urwid.ExitMainLoop()
 
 # #############################################################################
@@ -1188,13 +1191,9 @@ class ChatWindow(urwid.Pile):
 
     def on_edit_active(self, mode, txt):
         if mode == ':':
-            elems = list(filter(lambda x: x != '', txt.split(' ')))
-            try:
-                cmd = elems[0].lower()
-                args = elems[1:]
-                self.state.commands.exec(cmd, args)
-            except IndexError:
-                pass
+            space = txt.find(' ')
+            cmd, args = (txt[0:space], txt[space+1:]) if space >= 0 else (txt, '')
+            self.state.commands.exec(cmd.lower(), args)
         elif mode == '/':
             pass
         elif txt.strip(' ') != '':
