@@ -997,6 +997,22 @@ class ChatWindow(urwid.Pile):
                     while char(0) in space:
                         self.edit_pos = self.edit_pos + 1
                     return None
+            elif key in ('page up', 'page down'):
+                (col,row) = self.get_cursor_coords(size)
+                assert len(size) == 1
+                delta = self.rows(size)
+                if key == 'page up':
+                    delta = -delta
+                (maxcol,) = size
+                min_xy = self.position_coords(maxcol, 0)
+                max_xy = self.position_coords(maxcol, len(self.edit_text))
+                y = row + delta
+                if y < min_xy[1]:
+                    y = min_xy[1]
+                if y > max_xy[1]:
+                    y = max_xy[1]
+                if row != y and self.move_cursor_to_coords(size, col, y):
+                    return None
 
             return key
 
