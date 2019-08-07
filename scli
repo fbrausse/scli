@@ -1312,11 +1312,11 @@ class MainWindow(urwid.Frame):
         if len(self._wcontext.contents) == 2:
             self._wcontext.contents.clear()
             self._wcontext.contents.append(
-                (MainWindow.NiceBox(self._wchat),
+                (NiceBox(self._wchat),
                  self._wcontext.options(width_amount=3)))
         else:
             self._wcontext.contents.insert(0,
-                (MainWindow.NiceBox(self._wcontacts),
+                (NiceBox(self._wcontacts),
                  self._wcontext.options(width_amount=1)))
 
     def show_help_pop_up(self):
