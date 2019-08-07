@@ -530,6 +530,7 @@ class BackgroundProcess:
         return self._proc
 
     def _kill_wait(self):
+        logging.debug('BackgroundProcess._kill_wait: terminating background process.')
         self._proc.terminate()
         self._proc.wait()
 
@@ -642,6 +643,14 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
             "username": user
         }).encode("utf8") + b"\n")
         self.proc.stdin.flush()
+
+    def _kill_wait(self):
+        self.proc.stdin.write(json.dumps({
+            "type": "unsubscribe",
+            "username": self.user
+        }).encode("utf8") + b"\n")
+        self.proc.stdin.flush()
+        super()._kill_wait()
 
     def json_handler(self, message):
         if message.get("type") != "message" or (
@@ -1316,7 +1325,7 @@ class MainWindow(urwid.Frame):
 
     @property
     def focus_position(self):
-        #assert self.focus_position == 'body' # XXX: how not to recurse?
+        assert super().focus_position == 'body'
         if len(self._wcontext.contents) == 2 and self._wcontext.focus_position == 0:
             return 'contacts'
         elif self._wchat.is_focused_chat():
