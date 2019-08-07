@@ -566,7 +566,7 @@ class JsonLineReaderMixin:
         super().__init__(*args, **kwargs)
         self._buffer = b''
 
-    def daemon_handler(self, line):
+    def _daemon_handler(self, line):
         line = self._buffer + line
         lines = line.split(b'\n')
         if lines[-1] != b'':
@@ -582,11 +582,11 @@ class JsonLineReaderMixin:
 
             try:
                 e = json.loads(line)
-                logging.debug('received json line: %s', line)
+                logging.debug('_daemon_handler: received json line: %s', line)
                 # urwid.emit_signal(self, 'receive_message', e['envelope'])
-                self.json_handler(e)
+                self._json_handler(e)
             except json.decoder.JSONDecodeError as e:
-                logging.error('daemon_handler: error parsing as JSON: %s', line)
+                logging.error('_daemon_handler: error parsing as JSON: %s', line)
                 logging.exception(e)
                 # TODO: display error to user
                 continue
@@ -596,11 +596,11 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
     def __init__(self, user, loop, emit_obj):
         self.user = user
         self._emit_obj = emit_obj
-        fd = loop.watch_pipe(self.daemon_handler)
+        fd = loop.watch_pipe(self._daemon_handler)
         super().__init__(Popen(['signal-cli', '-u', user, 'daemon', '--json'],
                                stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
 
-    def json_handler(self, e):
+    def _json_handler(self, e):
         urwid.emit_signal(self._emit_obj, 'receive_message', e['envelope'])
 
     def send_message(self, contact, message="", attachments=None):
@@ -663,7 +663,7 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
     def __init__(self, user, loop, emit_obj, cmd : list):
         self.user = user
         self._emit_obj = emit_obj
-        fd = loop.watch_pipe(self.daemon_handler)
+        fd = loop.watch_pipe(self._daemon_handler)
         super().__init__(Popen(cmd, stdin=PIPE, stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
         # send messages to self.proc.stdin
         self.proc.stdin.write(json.dumps({
@@ -680,7 +680,7 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         self.proc.stdin.flush()
         super()._kill_wait()
 
-    def json_handler(self, message):
+    def _json_handler(self, message):
         if message.get("type") != "message" or (
             not message["data"]["isReceipt"] and message["data"].get("dataMessage") is None
         ):
@@ -718,24 +718,6 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         #
         #    if data["type"] == "unexpected_error":
         #        raise ValueError("unexpected error occurred")
-
-    def register(self, voice=False):
-        """
-        Register the given number.
-
-        voice: Whether to receive a voice call or an SMS for verification.
-        """
-        payload = {"type": "register", "username": self.user, "voice": voice}
-        self._send_command(payload)
-
-    def verify(self, code: str):
-        """
-        Verify the given number by entering the code you received.
-
-        code: The code Signal sent you.
-        """
-        payload = {"type": "verify", "username": self.user, "code": code}
-        self._send_command(payload)
 
     def send_message(self, recipient: str, text: str, attachments = None) -> None:
         """
