@@ -1634,9 +1634,8 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                 if buttons:
                     btn_ok = urwid.Button('OK', self.close, True)
                     btn_cancel = urwid.Button('Cancel', self.close, False)
-                    b = urwid.GridFlow([btn_ok, btn_cancel],
-                                       10, 1, 1, ('relative', 100))
-                    w = urwid.Pile([widget, urwid.Filler(b)])
+                    b = urwid.GridFlow([btn_ok, btn_cancel], 10, 1, 0, 'right')
+                    w = urwid.Pile([widget, ('pack',b)])
                     super().__init__(w)
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
