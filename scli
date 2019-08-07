@@ -1063,39 +1063,34 @@ class ChatWindow(urwid.Pile):
 
                 source = envelope['source']
                 msg = get_envelope_msg(envelope)
-                date = None
                 try:
                     date = datetime.utcfromtimestamp(envelope['timestamp'])
                 except ValueError:
                     date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
-                date = date.strftime('%H:%M (%Y-%m-%d)')
 
-                txt_name   = FocusableText([btxt('Name   : '),
-                                            ntxt(get_contact_name(state.signal.get_contact(source)))])
-                txt_source = FocusableText([btxt('Number : '),
-                                            ntxt(source)])
-                txt_date   = FocusableText([btxt('Date   : '),
-                                            ntxt(date)])
-                txt_msg    = FocusableText([btxt('Message: '),
-                                            ntxt(msg)])
-                txt_urls   = FocusableText([btxt('Links')], align='center')
+                named = {
+                    'Name   ': get_contact_name(state.signal.get_contact(source)),
+                    'Number ': source,
+                    'Date   ': date.strftime('%H:%M:%S (%Y-%m-%d)'),
+                    'Message': msg,
+                }
 
-                urls = []
-                for url in get_urls(msg):
-                    txt_url = FocusableText([ntxt(url)])
-                    txt_url.full_path = url
-                    urls.append(txt_url)
+                def mk_item(txt, data):
+                    w = FocusableText(ntxt(txt))
+                    w.original_widget.full_path = data
+                    return w
 
-                txt_atchs = FocusableText(btxt('Attachments'), align='center')
+                super().__init__(urwid.SimpleFocusListWalker([
+                    *[FocusableText([btxt(k + ': '), ntxt(named[k])]) for k in named],
 
-                atchs = []
-                for atch in get_envelope_attachments(envelope):
-                    txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
-                    txt_atch.original_widget.full_path = get_attachment_path(self.state.cfg, atch)
-                    atchs.append(txt_atch)
+                    urwid.Text([btxt('Links')], align='center'),
+                    *[mk_item(url,url) for url in get_urls(msg)],
 
-                items = [txt_name, txt_source, txt_date, txt_msg, txt_urls, *urls, txt_atchs, *atchs]
-                super().__init__(urwid.SimpleFocusListWalker(items))
+                    urwid.Text(btxt('Attachments'), align='center'),
+                    *[mk_item(get_attachment_name(a),
+                              get_attachment_path(self.state.cfg, a))
+                      for a in get_envelope_attachments(envelope)]
+                ]))
 
             def keypress(self, size, key):
                 item = self.body[self.focus_position].original_widget
@@ -1619,14 +1614,12 @@ class PopUpTarget(urwid.WidgetPlaceholder):
     def show_pop_up(self, widget, notify = None, width = 75, height = 65):
         org = self.original_widget
 
-        def on_pop_up_closed(sender, accepted, result):
+        def on_pop_up_closed(accepted, result):
             self.original_widget = org
             if notify:
                 urwid.emit_signal(notify, 'dialog_finished', accepted, result)
 
         class PopUpWrapper(NiceBox):
-            signals = ['closed']
-
             def __init__(self, widget, buttons=True):
                 self._widget = widget
                 self._widget.result = None
@@ -1646,31 +1639,24 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                 result = None
                 if status:
                     result = self._widget.result
-                self._emit('closed', status, result)
+                on_pop_up_closed(status, result)
 
             def keypress(self, size, key):
                 key = super().keypress(size, key)
 
                 if update_focus(self._command_map[key], self._order):
                     return None
-
                 if key == 'q':
                     self.close()
                     return None
-
                 return key
 
-        wrapper = PopUpWrapper(widget)
-        urwid.connect_signal(wrapper, 'closed', on_pop_up_closed)
-
-        popup = urwid.Overlay(wrapper,
-                              org,
-                              align='center',
-                              valign='middle',
-                              width=('relative', width),
-                              height=('relative', height))
-
-        self.original_widget = popup
+        self.original_widget = urwid.Overlay(PopUpWrapper(widget),
+                                             org,
+                                             align='center',
+                                             valign='middle',
+                                             width=('relative', width),
+                                             height=('relative', height))
 
 
 # #############################################################################
