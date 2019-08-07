@@ -1071,46 +1071,46 @@ class ChatWindow(urwid.Pile):
                 except ValueError:
                     date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
 
-                named = {
-                    'Name   ': get_contact_name(state.signal.get_contact(source)),
-                    'Number ': source,
-                    'Date   ': date.strftime('%H:%M:%S (%Y-%m-%d)'),
-                    'Message': msg,
-                }
-
-                def mk_item(txt, data, opt=None):
+                def mk_item(data, txt, opt=None, key=None):
                     if opt:
-                        txt = txt + ' (' + opt + ')'
-                    w = FocusableText(ntxt(txt))
-                    w.original_widget.full_path = data
+                        if txt:
+                            txt = txt + ' '
+                        txt = txt + '(' + opt + ')'
+                    if key:
+                        key += ': '
+                    l = []
+                    if key:
+                        l.append(btxt(key))
+                    if txt:
+                        l.append(ntxt(txt))
+                    w = FocusableText(l)
+                    w.full_path = data
                     return w
 
                 super().__init__(urwid.SimpleFocusListWalker([
-                    *[FocusableText([btxt(k + ': '), ntxt(named[k])]) for k in named],
+                    *[mk_item(v, v, key=k) for k,v in [
+                        ('Name   ', get_contact_name(state.signal.get_contact(source))),
+                        ('Number ', source),
+                        ('Date   ', date.strftime('%H:%M:%S (%Y-%m-%d)')),
+                        ('Message', msg),
+                    ]],
 
-                    urwid.Text([btxt('Links')], align='center'),
-                    *[mk_item(url,url) for url in get_urls(msg)],
+                    urwid.Text(btxt('Links'), align='center'),
+                    *[mk_item(url, url) for url in get_urls(msg)],
 
                     urwid.Text(btxt('Attachments'), align='center'),
-                    *[mk_item(get_attachment_name(a),
-                              get_attachment_path(self.state.cfg, a),
-                              get_attachment_type(a))
+                    *[mk_item(get_attachment_path(self.state.cfg, a),
+                              get_attachment_name(a),
+                              opt = get_attachment_type(a))
                       for a in get_envelope_attachments(envelope)]
                 ]))
 
             def keypress(self, size, key):
-                item = self.body[self.focus_position].original_widget
+                item = self.body[self.focus_position]
                 key = super().keypress(size, key)
                 if key == 'y':
-                    text, _ = item.get_text()
                     key = None
-                    try:
-                        clip.put(self.state, item.full_path)
-                    except AttributeError:
-                        try:
-                            clip.put(self.state, text.split(": ")[1])
-                        except IndexError:
-                            clip.put(self.state, text)
+                    clip.put(self.state, item.full_path)
                 elif key in ('enter', 'o'):
                     key = None
                     try:
