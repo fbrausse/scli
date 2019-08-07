@@ -1617,7 +1617,8 @@ class PopUpTarget(urwid.WidgetPlaceholder):
 
     # if notify, it must accept the signal 'dialog_finished' with 2 parameter:
     # 'accepted' (True or False) and 'result' (unknown)
-    def show_pop_up(self, widget, notify = None, width = 75, height = 65):
+    def show_pop_up(self, widget, notify = None,
+                    width = ('relative', 75), height = ('relative', 65)):
         org = self.original_widget
 
         def on_pop_up_closed(accepted, result):
@@ -1661,8 +1662,8 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                                              org,
                                              align='center',
                                              valign='middle',
-                                             width=('relative', width),
-                                             height=('relative', height))
+                                             width=width,
+                                             height=height)
 
 
 # #############################################################################
