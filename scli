@@ -1024,69 +1024,6 @@ class ChatWindow(urwid.Pile):
             return key
 
 
-    class MessageInfo(VimListBox):
-        def __init__(self, state, envelope):
-            self.state = state
-
-            source = envelope['source']
-            msg = get_envelope_msg(envelope)
-            date = None
-            try:
-                date = datetime.utcfromtimestamp(envelope['timestamp'])
-            except ValueError:
-                date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
-            date = date.strftime('%H:%M (%Y-%m-%d)')
-
-            txt_name = FocusableText([btxt('Name   : '),
-                                      ntxt(get_contact_name(state.signal.get_contact(source)))])
-            txt_source = FocusableText([btxt('Number : '),
-                                        ntxt(source)])
-            txt_date = FocusableText([btxt('Date   : '),
-                                      ntxt(date)])
-            txt_msg = FocusableText([btxt('Message: '),
-                                     ntxt(msg)])
-            txt_urls = FocusableText([btxt('Links')], align='center')
-
-            urls = []
-            for url in get_urls(msg):
-                txt_url = FocusableText([ntxt(url)])
-                txt_url.full_path = url
-                urls.append(txt_url)
-
-            txt_atchs = FocusableText(btxt('Attachments'), align='center')
-
-            atchs = []
-            for atch in get_envelope_attachments(envelope):
-                txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
-                txt_atch.original_widget.full_path = get_attachment_path(self.state.cfg, atch)
-                atchs.append(txt_atch)
-
-
-            items = [txt_name, txt_source, txt_date, txt_msg, txt_urls, *urls, txt_atchs, *atchs]
-            super().__init__(urwid.SimpleFocusListWalker(items))
-
-        def keypress(self, size, key):
-            item = self.body[self.focus_position].original_widget
-            key = super().keypress(size, key)
-            if key == 'y':
-                text, _ = item.get_text()
-                key = None
-                try:
-                    clip.put(self.state, item.full_path)
-                except AttributeError:
-                    try:
-                        clip.put(self.state, text.split(": ")[1])
-                    except IndexError:
-                        clip.put(self.state, text)
-            elif key in ('enter', 'o'):
-                key = None
-                try:
-                    self.state.commands.open_file(item.full_path)
-                except (AttributeError, TypeError):
-                    pass
-            return key
-
-
     def __init__(self, state):
         self.state = state
 
@@ -1120,7 +1057,68 @@ class ChatWindow(urwid.Pile):
         return self._wline.mode == '/'
 
     def show_message_info(self, envelope):
-        self.state.show_dialog(ChatWindow.MessageInfo(self.state, envelope))
+        class MessageInfo(VimListBox):
+            def __init__(self, state, envelope):
+                self.state = state
+
+                source = envelope['source']
+                msg = get_envelope_msg(envelope)
+                date = None
+                try:
+                    date = datetime.utcfromtimestamp(envelope['timestamp'])
+                except ValueError:
+                    date = datetime.utcfromtimestamp(envelope['timestamp'] / 1000)
+                date = date.strftime('%H:%M (%Y-%m-%d)')
+
+                txt_name   = FocusableText([btxt('Name   : '),
+                                            ntxt(get_contact_name(state.signal.get_contact(source)))])
+                txt_source = FocusableText([btxt('Number : '),
+                                            ntxt(source)])
+                txt_date   = FocusableText([btxt('Date   : '),
+                                            ntxt(date)])
+                txt_msg    = FocusableText([btxt('Message: '),
+                                            ntxt(msg)])
+                txt_urls   = FocusableText([btxt('Links')], align='center')
+
+                urls = []
+                for url in get_urls(msg):
+                    txt_url = FocusableText([ntxt(url)])
+                    txt_url.full_path = url
+                    urls.append(txt_url)
+
+                txt_atchs = FocusableText(btxt('Attachments'), align='center')
+
+                atchs = []
+                for atch in get_envelope_attachments(envelope):
+                    txt_atch = FocusableText(ntxt(get_attachment_name(atch)))
+                    txt_atch.original_widget.full_path = get_attachment_path(self.state.cfg, atch)
+                    atchs.append(txt_atch)
+
+                items = [txt_name, txt_source, txt_date, txt_msg, txt_urls, *urls, txt_atchs, *atchs]
+                super().__init__(urwid.SimpleFocusListWalker(items))
+
+            def keypress(self, size, key):
+                item = self.body[self.focus_position].original_widget
+                key = super().keypress(size, key)
+                if key == 'y':
+                    text, _ = item.get_text()
+                    key = None
+                    try:
+                        clip.put(self.state, item.full_path)
+                    except AttributeError:
+                        try:
+                            clip.put(self.state, text.split(": ")[1])
+                        except IndexError:
+                            clip.put(self.state, text)
+                elif key in ('enter', 'o'):
+                    key = None
+                    try:
+                        self.state.commands.open_file(item.full_path)
+                    except (AttributeError, TypeError):
+                        pass
+                return key
+
+        self.state.show_dialog(MessageInfo(self.state, envelope))
 
     def on_edit_mode_changed(self, old, new):
         if '/' in (old, new):
