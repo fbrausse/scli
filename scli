@@ -878,8 +878,11 @@ class ContactsWindow(VimListBox):
                 def keypress(size, key):
                     if key in ('enter', 'l'):
                         self.state.set_current_contact(x, key == 'enter')
-                        return None
-                    return key
+                    elif key == 'u':
+                        self.state.set_current_contact(None, False)
+                    else:
+                        return key
+                    return None
                 widget.keypress = keypress
 
             am = urwid.AttrMap(widget, None, focus_map='reversed')
@@ -902,13 +905,6 @@ class ContactsWindow(VimListBox):
                                       enumerate(self.body)))[0]
             except IndexError:
                 self.focus_first()
-
-    def keypress(self, size, key):
-        key = super().keypress(size, key)
-        if key == 'u':
-            self.state.set_current_contact(None, False)
-            key = None
-        return key
 
 # #############################################################################
 # ChatWindow
