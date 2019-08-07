@@ -13,7 +13,8 @@ import argparse
 import logging
 import errno
 import textwrap
-from subprocess import PIPE, Popen
+import random
+from subprocess import STDOUT, PIPE, Popen
 from datetime import datetime
 
 import urwid
@@ -598,7 +599,7 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
         self._emit_obj = emit_obj
         fd = loop.watch_pipe(self._daemon_handler)
         super().__init__(Popen(['signal-cli', '-u', user, 'daemon', '--json'],
-                               stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
+                               stdout=fd, stderr=STDOUT, close_fds=True))
 
     def _json_handler(self, e):
         urwid.emit_signal(self._emit_obj, 'receive_message', e['envelope'])
@@ -656,15 +657,13 @@ def signalcli_daemon(user, loop, emit_obj):
     return SignalCLIDaemon(user, loop, emit_obj)
 
 
-import random
-
 # some code from https://gitlab.com/stavros/pysignald/blob/master/signald/main.py
 class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
     def __init__(self, user, loop, emit_obj, cmd : list):
         self.user = user
         self._emit_obj = emit_obj
         fd = loop.watch_pipe(self._daemon_handler)
-        super().__init__(Popen(cmd, stdin=PIPE, stdout=fd, stderr=subprocess.STDOUT, close_fds=True))
+        super().__init__(Popen(cmd, stdin=PIPE, stdout=fd, stderr=STDOUT, close_fds=True))
         # send messages to self.proc.stdin
         self.proc.stdin.write(json.dumps({
             "type": "subscribe",
@@ -825,7 +824,8 @@ class ContactsWindow(VimListBox):
 
         w.notify_count = count
         if count > 0:
-            w.original_widget.set_text([('bold', '({}) '.format(w.notify_count)), get_contact_name(w.contact)])
+            w.original_widget.set_text([('bold', '({}) '.format(w.notify_count)),
+                                        get_contact_name(w.contact)])
         else:
             w.original_widget.set_text(get_contact_name(w.contact))
 
@@ -1135,7 +1135,8 @@ class ChatWindow(urwid.Pile):
                     self.buttons_grid = urwid.GridFlow([btn_ok, btn_cancel],
                                                         10, 1, 1,
                                                         ('relative', 100))
-                    super().__init__(urwid.Pile([widget, urwid.Filler(self.buttons_grid)]))
+                    super().__init__(urwid.Pile([widget,
+                                                 urwid.Filler(self.buttons_grid)]))
                     w = self.original_widget
                     b = self.buttons_grid
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
@@ -1309,7 +1310,9 @@ class MainWindow(urwid.Frame):
 
     class NiceBox(urwid.AttrMap):
         def __init__(self, w, title=''):
-            box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'), title_align='center', title=title), 'box_normal')
+            box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'),
+                                              title_align='center', title=title),
+                                'box_normal')
             super().__init__(box, None, focus_map={'box_normal':'box_focused'})
 
 
@@ -1435,7 +1438,9 @@ class MainWindow(urwid.Frame):
 # #############################################################################
 
 class State:
-    signals = ['current_contact_changed', 'status_changed', 'notification_changed', 'error_changed', 'dialog_requested', 'dialog_finished']
+    signals = ['current_contact_changed', 'status_changed',
+               'notification_changed', 'error_changed', 'dialog_requested',
+               'dialog_finished']
 
     def __init__(self, cfg):
         self.signal = Signal(get_backend_desc(cfg), cfg.username)
@@ -1675,113 +1680,117 @@ def parse_cfg_file(cfg_file_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c',
-                        '--config-file',
-                        type=str,
-                        default=SCLI_CFG_FILE,
-                        help='Config file. Configs in this file overrides every other config supplied by command line. (Default: ' + SCLI_CFG_FILE + ')')
-
-    parser.add_argument('-u',
-                        '--username',
-                        type=str,
-                        help='Phone number starting with "+" followed by country code.')
-
-    parser.add_argument('-n',
-                        '--enable-notifications',
-                        default=False,
-                        action='store_true',
-                        help='Enable desktop notifications. (Also see --notification-command)')
-
-    parser.add_argument('-N',
-                        '--notification-command',
-                        type=str,
-                        default="notify-send scli '%s - %m'",
-                        help='The command to run when a new message arrives. %%m is replaced with the message, %%s is replaced with the sender. (Default is "notify-send scli \'%%s - %%m\'')
-
-    parser.add_argument('-o',
-                        '--open-command',
-                        type=str,
-                        default='xdg-open "%u"',
-                        help='File/URL opener command. %%u is replaced with the path. (Default is "xdg-open %%u")')
-
-    parser.add_argument('-e',
-                        '--editor-command',
-                        type=str,
-                        default='$EDITOR',
-                        help='A text editor command to edit your messages externally.')
-
-    parser.add_argument('-G',
-                        '--clipboard-get-command',
-                        type=str,
-                        default="",
-                        help='A command that returns a valid file path(s). When user calls `:attachClip` or `:c`, this command is executed and the returned file(s) will be added as attachment(s). The command should return one absolute file path per each line. (Default uses `xclip`)')
-
-    parser.add_argument('-P',
-                        '--clipboard-put-command',
-                        type=str,
-                        default="",
-                        help='A command that puts given text to clipboard. %%s will be replaced with the text. (Default uses `xclip`.')
-
-    parser.add_argument('-s',
-                        '--save-history',
-                        default=False,
-                        action='store_true',
-                        help='Enable saving history. History is saved as plain text. (Disabled by default.)')
-
-    parser.add_argument('-f',
-                        '--use-formatting',
-                        default=False,
-                        action='store_true',
-                        help='Use /italic/, *bold*, ~strikethrough~, _underline_ formatting in messages. (Disabled by default.)')
-
-    parser.add_argument('-w',
-                        '--wrap-at',
-                        type=int,
-                        default=300,
-                        help='Wrap messages at given column.')
-
+    parser.add_argument('-c', '--config-file',
+        type=str,
+        default=SCLI_CFG_FILE,
+        help='Config file. Configs in this file overrides every other config ' +
+             'supplied by command line. (Default: ' + SCLI_CFG_FILE + ')'
+    )
+    parser.add_argument('-u', '--username',
+        type=str,
+        help='Phone number starting with "+" followed by country code.'
+    )
+    parser.add_argument('-n', '--enable-notifications',
+        default=False,
+        action='store_true',
+        help='Enable desktop notifications. (Also see --notification-command)'
+    )
+    parser.add_argument('-N', '--notification-command',
+        type=str,
+        default="notify-send scli '%s - %m'",
+        help='The command to run when a new message arrives. %%m is replaced ' +
+             'with the message, %%s is replaced with the sender. (Default is ' +
+             '"notify-send scli \'%%s - %%m\''
+    )
+    parser.add_argument('-o', '--open-command',
+        type=str,
+        default='xdg-open "%u"',
+        help='File/URL opener command. %%u is replaced with the path. ' +
+             '(Default is "xdg-open %%u")'
+    )
+    parser.add_argument('-e', '--editor-command',
+        type=str,
+        default='$EDITOR',
+        help='A text editor command to edit your messages externally.'
+    )
+    parser.add_argument('-G', '--clipboard-get-command',
+        type=str,
+        default="",
+        help='A command that returns a valid file path(s). When user calls ' +
+             '`:attachClip` or `:c`, this command is executed and the returned ' +
+             'file(s) will be added as attachment(s). The command should return ' +
+             'one absolute file path per each line. (Default uses `xclip`)'
+    )
+    parser.add_argument('-P', '--clipboard-put-command',
+        type=str,
+        default="",
+        help='A command that puts given text to clipboard. %%s will be replaced ' +
+             'with the text. (Default uses `xclip`.'
+    )
+    parser.add_argument('-s', '--save-history',
+        default=False,
+        action='store_true',
+        help='Enable saving history. History is saved as plain text. ' +
+             '(Disabled by default.)'
+    )
+    parser.add_argument('-f', '--use-formatting',
+        default=False,
+        action='store_true',
+        help='Use /italic/, *bold*, ~strikethrough~, _underline_ formatting in ' +
+             'messages. (Disabled by default.)'
+    )
+    parser.add_argument('-w', '--wrap-at',
+        type=int,
+        default=300,
+        help='Wrap messages at given column.'
+    )
     parser.add_argument('--one-sided',
-                        default=False,
-                        action='store_true',
-                        help='Show messages aligned to one side in message list. (Disabled by default.)')
-
+        default=False,
+        action='store_true',
+        help='Show messages aligned to one side in message list. ' +
+             '(Disabled by default.)'
+    )
     parser.add_argument('--show-names',
-                        default=False,
-                        action='store_true',
-                        help='Show contact names even in message list even if it is one-to-one conversation. (Disabled by default.)')
-
+        default=False,
+        action='store_true',
+        help='Show contact names even in message list even if it is one-to-one ' +
+             'conversation. (Disabled by default.)'
+    )
     parser.add_argument('--contacts-autohide',
-                        default=False,
-                        action='store_true',
-                        help='Autohide the contacts pane when it loses focus. (Disabled by default)')
-
+        default=False,
+        action='store_true',
+        help='Autohide the contacts pane when it loses focus. (Disabled by default)'
+    )
     parser.add_argument('--no-daemon',
-                        action='store_true',
-                        help='Not really useful.')
-
+        action='store_true',
+        help='Not really useful.'
+    )
     parser.add_argument('--no-italics',
-                        default=False,
-                        action='store_true',
-                        help="don't use italics fonts (some fonts don't have those glyphs)")
-
+        default=False,
+        action='store_true',
+        help="don't use italics fonts (some fonts don't have those glyphs)"
+    )
     parser.add_argument('--no-mouse',
-                        default=False,
-                        action='store_true',
-                        help="disable terminal mouse support")
-
+        default=False,
+        action='store_true',
+        help="disable terminal mouse support"
+    )
     parser.add_argument('--signald-sock',
-                        default='/var/run/signald/signald.sock',
-                        type=str,
-                        help='path to signald socket')
-
+        default='/var/run/signald/signald.sock',
+        type=str,
+        help='path to signald socket'
+    )
     parser.add_argument('--signald',
-                        default=None,
-                        type=str,
-                        help="use SIGNALD={socat,netcat} to connect to signald socket instead of spawning signal-cli; please note, that 'netcat' denotes OpenBSD's netcat (must support '-U' for unix domain sockets)")
-
+        default=None,
+        type=str,
+        help="use SIGNALD={socat,netcat} to connect to signald socket instead " +
+             "of spawning signal-cli; please note, that 'netcat' denotes " +
+             "OpenBSD's netcat (must support '-U' for unix domain sockets)"
+    )
     parser.add_argument('--debug',
-                        default=False,
-                        action='store_true')
+        default=False,
+        action='store_true'
+    )
 
     cfg = parser.parse_args()
     file_cfg = parse_cfg_file(cfg.config_file)
