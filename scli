@@ -484,12 +484,8 @@ class Commands:
             self.state.set_error(':attach takes at least one argument.')
             return
 
-        attachment = os.path.expanduser(args[0])
         message = ' '.join(args[1:])
-        if not os.path.exists(attachment):
-            self.state.set_error('File does not exist: ' + attachment)
-            return
-
+        attachment = args[0]
         self.state.send_message(message, [attachment])
 
     def attach_clip(self, args):
@@ -616,13 +612,13 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
     def _json_handler(self, e):
         urwid.emit_signal(self._emit_obj, 'receive_message', e['envelope'])
 
-    def send_message(self, contact, message="", attachments=None):
+    def send_message(self, contact, message, attachments=None):
         if not attachments:
             attachments = []
 
         attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
         if not all([os.path.exists(attachment_path) for attachment_path in attachment_paths]):
-            logging.warning('send_message: Attached file(s) does not exist.')
+            logging.warning('SignalCLI: send_message: Attached file(s) does not exist.')
             return
 
         if not contact.get('number'):
@@ -737,6 +733,8 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         recipient: The recipient's phone number, in E.123 format.
         text:      The text of the message to send.
         """
+        if attachments is None:
+            attachments = []
         payload = {
             "type": "send",
             "username": self.user,
@@ -770,23 +768,11 @@ class Signal:
         self._data = None
         self._buffer = b''
         self._path = be_desc.user_path(user)
-        self.daemon = None
         self.reload_data()
 
     def reload_data(self):
         with open(self._path) as f:
             self._data = json.load(f)
-
-    def send_message(self, contact, message="", attachments=None):
-        if not attachments:
-            attachments = []
-
-        attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
-        if not all([os.path.exists(attachment_path) for attachment_path in attachment_paths]):
-            logging.warning('send_message: Attached file(s) does not exist.')
-            return
-
-        self.daemon.send_message(contact, message, attachments)
 
     def contacts(self):
         return list(filter(lambda x: bool(get_contact_name(x).strip(' ')),
@@ -1400,6 +1386,7 @@ class State:
         self.current_contact = None
         self.loop = None
         self.current_chat = urwid.SimpleFocusListWalker([])
+        self.daemon = None
 
         self.commands = Commands(self)
 
@@ -1408,17 +1395,33 @@ class State:
 
     def start_daemon(self, loop):
         if not self.cfg.signald:
-            self.signal.daemon = signalcli_daemon(self.cfg.username, loop, self.signal)
+            self.daemon = signalcli_daemon(self.cfg.username, loop, self.signal)
         elif self.cfg.signald == 'socat':
-            self.signal.daemon = signald_socat(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
+            self.daemon = signald_socat(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
         else:
-            self.signal.daemon = signald_netcat_openbsd(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
+            self.daemon = signald_netcat_openbsd(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
 
-    def send_message(self, message, attachments=None):
-        if not self.current_contact:
+    def send_message(self, message, attachments=None, contact=None):
+        if not contact:
+            contact = self.current_contact
+        if not contact:
             self.set_error('error: no contact selected, cannot send message')
-        elif message or attachments:
-            self.signal.send_message(self.current_contact, message, attachments)
+            return False
+        if not (message or attachments):
+            return False
+
+        if not attachments:
+            attachments = []
+
+        attachment_paths = [os.path.expanduser(attachment) for attachment in attachments]
+        for i, a in enumerate(attachment_paths):
+            if not os.path.exists(a):
+                self.set_error('Attached file ' + attachments[i] + ' does not exist.')
+                logging.warning('send_message: Attached file(s) does not exist.')
+                return False
+
+        self.daemon.send_message(contact, message, attachment_paths)
+        return True
 
     def set_program_subtitle(self, subtitle, prefix=None):
         my_contacts = list(filter(lambda x: x.get('number') == self.cfg.username, self.signal.contacts()))
