@@ -313,6 +313,13 @@ class FocusableText(urwid.AttrMap):
         text.keypress = keypress
         super().__init__(text, None, focus_map=LIST_FOCUS_MAP)
 
+class NiceBox(urwid.AttrMap):
+    def __init__(self, w, title=''):
+        box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'),
+                                          title_align='center', title=title),
+                            'box_normal')
+        super().__init__(box, None, focus_map={'box_normal':'box_focused'})
+
 CURSOR_FIRST = 'scli cursor first'
 CURSOR_LAST  = 'scli cursor last'
 
@@ -1121,27 +1128,24 @@ class ChatWindow(urwid.Pile):
             self._w.original_widget = org
             urwid.emit_signal(self.state, 'dialog_finished', accepted, result)
 
-        class PopUpWrapper(urwid.LineBox):
+        class PopUpWrapper(NiceBox):
             signals = ['closed']
 
             def __init__(self, widget, buttons=True):
                 self._widget = widget
                 self._widget.result = None
 
-                self._buttons = buttons
                 if buttons:
                     btn_ok = urwid.Button('OK', self.close, True)
                     btn_cancel = urwid.Button('Cancel', self.close, False)
-                    self.buttons_grid = urwid.GridFlow([btn_ok, btn_cancel],
-                                                        10, 1, 1,
-                                                        ('relative', 100))
-                    super().__init__(urwid.Pile([widget,
-                                                 urwid.Filler(self.buttons_grid)]))
-                    w = self.original_widget
-                    b = self.buttons_grid
+                    b = urwid.GridFlow([btn_ok, btn_cancel],
+                                       10, 1, 1, ('relative', 100))
+                    w = urwid.Pile([widget, urwid.Filler(b)])
+                    super().__init__(w)
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
                     super().__init__(widget)
+                    self._order = [ { widget: 0 } ]
 
             def close(self, btn=None, status=False):
                 result = None
@@ -1152,7 +1156,7 @@ class ChatWindow(urwid.Pile):
             def keypress(self, size, key):
                 key = super().keypress(size, key)
 
-                if self._buttons and update_focus(self._command_map[key], self._order):
+                if update_focus(self._command_map[key], self._order):
                     return None
 
                 if key == 'q':
@@ -1308,14 +1312,6 @@ urwid.register_signal(ChatWindow.Editor, ChatWindow.Editor.signals)
 
 class MainWindow(urwid.Frame):
 
-    class NiceBox(urwid.AttrMap):
-        def __init__(self, w, title=''):
-            box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'),
-                                              title_align='center', title=title),
-                                'box_normal')
-            super().__init__(box, None, focus_map={'box_normal':'box_focused'})
-
-
     def __init__(self, state):
         self.state = state
 
@@ -1325,8 +1321,8 @@ class MainWindow(urwid.Frame):
         self._wstatus = urwid.Text("...")
         self._wnotify_count = urwid.Text("...")
 
-        self._wcontext = urwid.Columns([('weight', 1, MainWindow.NiceBox(self._wcontacts)),
-                                        ('weight', 3, MainWindow.NiceBox(self._wchat))],
+        self._wcontext = urwid.Columns([('weight', 1, NiceBox(self._wcontacts)),
+                                        ('weight', 3, NiceBox(self._wchat))],
                                        dividechars=0, focus_column=0)
         super().__init__(self._wcontext,
                          footer=urwid.Columns([self._wstatus, ('pack', self._wnotify_count)]))
