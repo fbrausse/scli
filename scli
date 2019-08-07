@@ -1334,11 +1334,11 @@ class MainWindow(urwid.Frame):
                  self._wcontext.options(width_amount=1)))
 
     def show_help_pop_up(self):
-        class HelpDialog(VimListBox):
-            def __init__(self):
-                super().__init__([urwid.Text(btxt("Keybindings")),
-                                  urwid.Text(btxt("Commands"))])
-        self.state.show_dialog(HelpDialog())
+        # TODO
+        self.state.show_dialog(VimListBox([
+            urwid.Text(btxt("Keybindings")),
+            urwid.Text(btxt("Commands"))
+        ]))
 
     def on_current_contact_changed(self, old, current, focus=False):
         if self.state.status_data is self.state.current_contact:
