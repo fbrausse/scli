@@ -843,10 +843,13 @@ class ContactsWindow(VimListBox):
             self.set_contact_notify_count(self.focus, 0)
         if _old != _current:
             for w in self.body:
-                if w.contact == _old:
-                    w.set_attr_map({})
-                elif _current and w.contact == _current:
-                    w.set_attr_map({None: 'selected'})
+                try:
+                    if _old and w.contact == _old:
+                        w.set_attr_map({})
+                    elif _current and w.contact == _current:
+                            w.set_attr_map({None: 'selected'})
+                except AttributeError:
+                    pass
 
     def on_receive_message(self, envelope):
         contact = get_envelope_contact(envelope, self.state.signal)
@@ -860,51 +863,34 @@ class ContactsWindow(VimListBox):
                 return
 
     def update_contacts(self):
-        def get_all_contacts(signal):
-            xs = []
-            xs.append('---')
-            xs.append('Groups')
-            xs.append('---')
-            xs.extend(signal.groups())
-            xs.append('---')
-            xs.append('Contacts')
-            xs.append('---')
-            xs.extend(signal.contacts())
-            return xs
-
         def mk_contact(x):
-            widget = None
-            contact = None
-            if x == '---':
-                widget = urwid.Divider('-')
-            elif isinstance(x, str):
-                widget = urwid.Text(('bold', '~~ ' + x + ' ~~'), align='center')
-            else:
-                widget = urwid.Text(get_contact_name(x))
-                contact = x
-                # we want to "select" and interact with these Text widgets
-                widget._selectable = True
-                def keypress(size, key):
-                    if key in ('enter', 'l'):
-                        self.state.set_current_contact(x, key == 'enter')
-                    elif key == 'u':
-                        self.state.set_current_contact(None, False)
-                    else:
-                        return key
-                    return None
-                widget.keypress = keypress
+            # we want to "select" and interact with these Text widgets
+            def keypress(size, key):
+                if key in ('enter', 'l'):
+                    self.state.set_current_contact(x, key == 'enter')
+                elif key == 'u':
+                    self.state.set_current_contact(None, False)
+                else:
+                    return key
+                return None
+            widget = FocusableText(get_contact_name(x), keypress)
+            widget.contact = x
+            widget.notify_count = 0
+            return widget
 
-            am = urwid.AttrMap(widget, None, focus_map='reversed')
-            am.contact = contact
-            am.notify_count = 0
-            return am
-
-        pre_focus = None
         try:
             pre_focus = self.focus.contact
         except AttributeError:
-            pass
-        self.body[:] = [mk_contact(x) for x in get_all_contacts(self.state.signal)]
+            pre_focus = None
+        header = lambda lbl: (urwid.Divider('-'),
+                              urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
+                              urwid.Divider('-'))
+        self.body[:] = [
+            *header('Groups'),
+            *map(mk_contact, self.state.signal.groups()),
+            *header('Contacts'),
+            *map(mk_contact, self.state.signal.contacts()),
+        ]
         if not pre_focus:
             self.focus_first()
         else:
