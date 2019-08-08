@@ -863,6 +863,10 @@ class ContactsWindow(VimListBox):
                 return
 
     def update_contacts(self):
+        def adorn(w, c = None):
+            w.contact = c
+            w.notify_count = 0
+            return w
         def mk_contact(x):
             # we want to "select" and interact with these Text widgets
             def keypress(size, key):
@@ -873,18 +877,16 @@ class ContactsWindow(VimListBox):
                 else:
                     return key
                 return None
-            widget = FocusableText(get_contact_name(x), keypress)
-            widget.contact = x
-            widget.notify_count = 0
-            return widget
+            return adorn(FocusableText(get_contact_name(x), keypress), x)
 
         try:
             pre_focus = self.focus.contact
         except AttributeError:
             pre_focus = None
-        header = lambda lbl: (urwid.Divider('-'),
+        header = lambda lbl: map(adorn,
+                             (urwid.Divider('-'),
                               urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
-                              urwid.Divider('-'))
+                              urwid.Divider('-')))
         self.body[:] = [
             *header('Groups'),
             *map(mk_contact, self.state.signal.groups()),
