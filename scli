@@ -39,46 +39,51 @@ SCLI_LOG_FILE     = os.path.join(SCLI_DATA_FOLDER, 'log')
 
 # TODO: make costumizable
 
-PALETTE = [('normal', '', ''),
-           ('box_normal', '', ''),
-           ('box_focused', 'dark blue', ''),
-           ('bold', 'bold', ''),
-           ('italic', 'italics', ''),
-           ('strikethrough', 'strikethrough', ''),
-           ('bolditalic', 'italics,bold', ''),
-           ('reversed', 'standout', ''),
-           ('selected', 'bold', ''),
-           ('underline', 'underline', ''),
-           ('key-binding', 'bold,dark magenta', ''),
-           ('command','dark green', ''),
-        ]
+PALETTE = [
+    ('normal', '', ''),
+    ('box_normal', '', ''),
+    ('box_focused', 'dark blue', ''),
+    ('bold', 'bold', ''),
+    ('italic', 'italics', ''),
+    ('strikethrough', 'strikethrough', ''),
+    ('bolditalic', 'italics,bold', ''),
+    ('reversed', 'standout', ''),
+    ('selected', 'bold', ''),
+    ('underline', 'underline', ''),
+    ('key-binding', 'bold,dark magenta', ''),
+    ('command','dark green', ''),
+]
 
 PALETTE_NO_ITALICS = [
-           ('normal', '', ''),
-           ('box_normal', '', ''),
-           ('box_focused', 'dark blue', ''),
-           ('bold', 'bold', ''),
-           ('italic', 'bold', ''),
-           ('strikethrough', 'strikethrough', ''),
-           ('bolditalic', 'bold', ''),
-           ('reversed', 'standout', ''),
-           ('selected', 'bold', ''),
-           ('underline', 'underline', ''),
-           ('key-binding', 'bold,dark magenta', ''),
-           ('command','dark green', ''),
-        ]
+    ('normal', '', ''),
+    ('box_normal', '', ''),
+    ('box_focused', 'dark blue', ''),
+    ('bold', 'bold', ''),
+    ('italic', 'bold', ''),
+    ('strikethrough', 'strikethrough', ''),
+    ('bolditalic', 'bold', ''),
+    ('reversed', 'standout', ''),
+    ('selected', 'bold', ''),
+    ('underline', 'underline', ''),
+    ('key-binding', 'bold,dark magenta', ''),
+    ('command','dark green', ''),
+]
 
-LIST_FOCUS_MAP = { None: 'reversed',
-                   'normal': 'reversed',
-                   'bold'  : 'reversed',
-                   'italic': 'reversed',
-                   'strikethrough': 'reversed',
-                   'bolditalic': 'reversed'}
+LIST_FOCUS_MAP = {
+    None: 'reversed',
+    'normal': 'reversed',
+    'bold'  : 'reversed',
+    'italic': 'reversed',
+    'strikethrough': 'reversed',
+    'bolditalic': 'reversed'
+}
 
-FORMAT_MAP = {'/': 'italic',
-              '*': 'bold',
-              '~': 'strikethrough',
-              '_': 'underline'}
+FORMAT_MAP = {
+    '/': 'italic',
+    '*': 'bold',
+    '~': 'strikethrough',
+    '_': 'underline'
+}
 
 def ibtxt(txt):
     return ('bolditalic', txt)
@@ -106,7 +111,9 @@ def to_txt(txt):
     else:
         return ''.join([to_txt(t) for t in txt])
 
-def do_fmt(message, fmap = FORMAT_MAP, keep_syms = True):
+def do_fmt(message, fmap = None, keep_syms = True):
+    if fmap is None:
+        fmap = FORMAT_MAP
     i, m = 0, []
     while i < len(message):
         c = message[i]
@@ -146,24 +153,26 @@ def mk_call(cmd, rmap=None, disown=False, use_pipe=True):
         cmd = cmd.replace(key, val)
 
     if disown:
-        subprocess.Popen(cmd, shell=True, stdout=DEVNULL, stderr=DEVNULL, preexec_fn=os.setpgrp)
+        subprocess.Popen(cmd, shell=True,
+                         stdout=DEVNULL, stderr=DEVNULL, preexec_fn=os.setpgrp)
+        return None
+
+    if use_pipe:
+        pipe = subprocess.Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     else:
-        if use_pipe:
-            pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pipe = subprocess.Popen(cmd, shell=True)
+
+    out, err = pipe.communicate()
+    logging.info('mk_call:%s', cmd)
+    try:
+        if pipe.returncode == 0:
+            logging.info('mk_call:exit_0:%s:%s', cmd, out.decode('utf-8'))
         else:
-            pipe = subprocess.Popen(cmd, shell=True)
+            logging.critical('mk_call:exit_%d:%s:%s', pipe.returncode, cmd, err.decode('utf-8'))
+    except AttributeError:
+        pass
 
-        out, err = pipe.communicate()
-        logging.info('mk_call:%s', cmd)
-        try:
-            if pipe.returncode == 0:
-                logging.info('mk_call:exit_0:%s:%s', cmd, out.decode('utf-8'))
-            else:
-                logging.critical('mk_call:exit_%d:%s:%s', pipe.returncode, cmd, err.decode('utf-8'))
-        except AttributeError:
-            pass
-
-        return out
+    return out
 
 
 class ObservableConfig:
@@ -267,9 +276,9 @@ def get_envelope_group_id(envelope):
 def get_envelope_attachments(envelope):
     try:
         return envelope['dataMessage']['attachments']
-    except e:
-        logger.debug('except in get_envelope_attachments for envelope: %s', envelope)
-        logger.exception(e)
+    except (KeyError, TypeError) as e:
+        logging.debug('except in get_envelope_attachments for envelope: %s', envelope)
+        logging.exception(e)
         return []
 
 def get_attachment_name(attachment):
@@ -300,7 +309,7 @@ def get_backend_desc(cfg):
 
         def list_users(self):
             return [x for x in os.listdir(self.data_path)
-                      if os.path.isfile(os.path.join(self.data_path, x))]
+                    if os.path.isfile(os.path.join(self.data_path, x))]
 
         def user_path(self, user):
             path = os.path.join(self.data_path, user)
@@ -784,7 +793,8 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
 
     def _json_handler(self, message):
         if message.get("type") != "message" or (
-            not message["data"]["isReceipt"] and message["data"].get("dataMessage") is None
+                not message["data"]["isReceipt"]
+                and message["data"].get("dataMessage") is None
         ):
             # If the message type isn't "message", or if it's a weird message whose
             # purpose I don't know, return. I think the weird message is a typing
@@ -793,7 +803,8 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         else:
             urwid.emit_signal(self._emit_obj, 'receive_message', message['data'])
 
-    def _get_id(self):
+    @staticmethod
+    def _get_id():
         "Generate a random ID."
         return "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(10))
 
@@ -876,8 +887,8 @@ class Signal:
     def groups(self):
         # Need to filter out any groups that where "active" == false
         return list(filter(lambda a: bool(a['active']),
-                    (filter(lambda n: bool(n['name'].strip(' ')),
-                     self._data["groupStore"]['groups']))))
+                           filter(lambda n: bool(n['name'].strip(' ')),
+                                  self._data["groupStore"]['groups'])))
 
     def get_contact(self, number_or_id):
         for contact in self.contacts():
@@ -931,7 +942,7 @@ class ContactsWindow(VimListBox):
                     if _old and w.contact == _old:
                         w.set_attr_map({})
                     elif _current and w.contact == _current:
-                            w.set_attr_map({None: 'selected'})
+                        w.set_attr_map({None: 'selected'})
                 except AttributeError:
                     pass
 
@@ -967,10 +978,10 @@ class ContactsWindow(VimListBox):
             pre_focus = self.focus.contact
         except AttributeError:
             pre_focus = None
-        header = lambda lbl: map(adorn,
-                             (urwid.Divider('-'),
-                              urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
-                              urwid.Divider('-')))
+        def header(lbl):
+            return map(adorn, (urwid.Divider('-'),
+                               urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
+                               urwid.Divider('-')))
         self.body[:] = [
             *header('Groups'),
             *map(mk_contact, self.state.signal.groups()),
@@ -981,9 +992,9 @@ class ContactsWindow(VimListBox):
             self.focus_first()
         else:
             try:
-                self.focus_position = map   (lambda n, am: n,
-                                      filter(lambda n, am: am.contact == pre_focus,
-                                      enumerate(self.body)))[0]
+                self.focus_position = list(map   (lambda n, am: n,
+                                           filter(lambda n, am: am.contact == pre_focus,
+                                           enumerate(self.body))))[0]
             except IndexError:
                 self.focus_first()
 
@@ -1012,7 +1023,7 @@ class ChatWindow(urwid.Pile):
         # a text markup suitable for the caption of an urwid.Edit.
         # It must include 'None' for the default mode and cannot include 'enter'
         # as it interferes with the line-break logic.
-        def __init__(self, mode_map = {None: ('bold', '> ')}):
+        def __init__(self, mode_map):
             self._mode = None
             self._mode_map = mode_map
             super().__init__(self._mode_map[self._mode], multiline=True)
@@ -1031,21 +1042,48 @@ class ChatWindow(urwid.Pile):
                 self.set_caption(self._mode_map[new])
                 urwid.emit_signal(self, 'editor_mode_changed', old, new)
 
+        def _keypress_enter(self, size):
+            send = True
+            if not self.mode:
+                send = False
+                if self.edit_pos == len(self.edit_text):
+                    if self.edit_pos > 0 and self.edit_text[self.edit_pos-1] == '\\':
+                        super().keypress(size, 'backspace')
+                    else:
+                        send = True
+            if send:
+                urwid.emit_signal(self, urwid.ACTIVATE, self.mode, self.edit_text)
+                self.mode = None
+                self.set_edit_text('')
+                return True
+            return False
+
+        def _keypress_word_lr(self, cmd):
+            space = (' ', '\t', '\n')
+            def char(delta):
+                if 0 <= self.edit_pos+delta < len(self.edit_text):
+                    return self.edit_text[self.edit_pos+delta]
+                return None
+            if cmd == 'word left':
+                if self.edit_pos > 0:
+                    while char(-1) in space:
+                        self.edit_pos = self.edit_pos - 1
+                    while char(-1) and char(-1) not in space:
+                        self.edit_pos = self.edit_pos - 1
+                    return True
+            elif cmd == 'word right':
+                if self.edit_pos < len(self.edit_text):
+                    self.edit_pos = self.edit_pos + 1
+                    while char(0) and char(0) not in space:
+                        self.edit_pos = self.edit_pos + 1
+                    while char(0) in space:
+                        self.edit_pos = self.edit_pos + 1
+                    return True
+            return False
+
         def keypress(self, size, key):
-            if key == 'enter':
-                send = True
-                if not self.mode:
-                    send = False
-                    if self.edit_pos == len(self.edit_text):
-                        if self.edit_pos > 0 and self.edit_text[self.edit_pos-1] == '\\':
-                            super().keypress(size, 'backspace')
-                        else:
-                            send = True
-                if send:
-                    urwid.emit_signal(self, urwid.ACTIVATE, self.mode, self.edit_text)
-                    self.mode = None
-                    self.set_edit_text('')
-                    return None
+            if key == 'enter' and self._keypress_enter(size):
+                return None
 
             mode = self.mode
             if key == 'esc' or self.edit_pos == 0 and key == 'backspace':
@@ -1058,27 +1096,9 @@ class ChatWindow(urwid.Pile):
 
             key = super().keypress(size, key)
 
-            space = (' ', '\t', '\n')
-            def char(delta):
-                if 0 <= self.edit_pos+delta < len(self.edit_text):
-                    return self.edit_text[self.edit_pos+delta]
+            if self._keypress_word_lr(self._command_map[key]):
                 return None
-            if self._command_map[key] == 'word left':
-                if self.edit_pos > 0:
-                    while char(-1) in space:
-                        self.edit_pos = self.edit_pos - 1
-                    while char(-1) and char(-1) not in space:
-                        self.edit_pos = self.edit_pos - 1
-                    return None
-            elif self._command_map[key] == 'word right':
-                if self.edit_pos < len(self.edit_text):
-                    self.edit_pos = self.edit_pos + 1
-                    while char(0) and char(0) not in space:
-                        self.edit_pos = self.edit_pos + 1
-                    while char(0) in space:
-                        self.edit_pos = self.edit_pos + 1
-                    return None
-            elif key in ('page up', 'page down'):
+            if key in ('page up', 'page down'):
                 (col,row) = self.get_cursor_coords(size)
                 assert len(size) == 1
                 delta = self.rows(size)
@@ -1097,22 +1117,22 @@ class ChatWindow(urwid.Pile):
 
             return key
 
+    _empty = urwid.SimpleFocusListWalker([])
 
     def __init__(self, state):
         self.state = state
 
         self.search_list = urwid.SimpleFocusListWalker([])
 
-        self._wsearch = urwid.ListBox(self.search_list)
+        self._wsearch = VimListBox(self.search_list)
         self._wtitle = urwid.Text('')
         self._wline = ChatWindow.Editor({
             None: ('bold', '> '), # default input
             '/' : ('bold', '/'),  # search mode
             ':' : ('bold', ':'),  # command mode
         })
-        self._empty = urwid.SimpleFocusListWalker([])
         chat = self.state.current_chat
-        self._wlist = VimListBox(chat if chat else self._empty)
+        self._wlist = VimListBox(chat if chat else ChatWindow._empty)
 
         self._w = urwid.WidgetPlaceholder(self._wlist)
         super().__init__([('pack'    , self._wtitle),
@@ -1254,7 +1274,7 @@ class ChatWindow(urwid.Pile):
     def on_current_contact_changed(self, old, current, focus=False):
         self.set_title(current)
         chat = self.state.current_chat
-        self._wlist.body = chat if chat else self._empty
+        self._wlist.body = chat if chat else ChatWindow._empty
         if current:
             self.focus_chatlast()
 
@@ -1393,9 +1413,8 @@ class MainWindow(urwid.Frame):
                 (NiceBox(self._wchat),
                  self._wcontext.options(width_amount=3)))
         else:
-            self._wcontext.contents.insert(0,
-                (NiceBox(self._wcontacts),
-                 self._wcontext.options(width_amount=1)))
+            self._wcontext.contents.insert(0, (NiceBox(self._wcontacts),
+                                               self._wcontext.options(width_amount=1)))
 
     def show_help_pop_up(self):
         def fmt(txt):
@@ -1636,7 +1655,7 @@ class State:
         attachments = get_envelope_attachments(envelope)
 
         txt = []
-        if len(attachments) > 0:
+        if attachments:
             anames = ', '.join([os.path.basename(attachment) for attachment in attachments])
             txt.append(ntxt('[attached: '))
             txt.append(itxt(anames))
@@ -1690,9 +1709,6 @@ urwid.register_signal(State, State.signals)
 
 class PopUpTarget(urwid.WidgetPlaceholder):
 
-    def __init__(self, widget):
-        super().__init__(widget)
-
     # if notify, it must accept the signal 'dialog_finished' with 2 parameter:
     # 'accepted' (True or False) and 'result' (unknown)
     def show_pop_up(self, widget, title = None, notify = None, buttons = 1, **kwargs):
@@ -1723,7 +1739,7 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                     w = urwid.Pile([widget, ('pack',b)])
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
-                    raise Exception("invalid value for 'button': " + button)
+                    raise Exception("invalid value for 'buttons': " + buttons)
                 super().__init__(w, title=title)
 
             def close(self, btn=None, status=False):
@@ -1754,21 +1770,21 @@ class PopUpTarget(urwid.WidgetPlaceholder):
 # #############################################################################
 
 def parse_cfg_file(cfg_file_path):
-    vars = {}
+    v = {}
     cfg_file_path = os.path.expanduser(cfg_file_path)
     if os.path.exists(cfg_file_path):
         with open(cfg_file_path) as cfg_file:
             for line in cfg_file:
                 if not line.startswith('#') and line.strip() != "":
                     name, var = line.partition("=")[::2]
-                    vars[name.strip().replace('-', '_')] = var.strip()
+                    v[name.strip().replace('-', '_')] = var.strip()
     elif cfg_file_path != SCLI_CFG_FILE and cfg_file_path != "":
         print('Given config file not found: ' + cfg_file_path, file=sys.stderr)
         sys.exit(2)
 
-    return vars
+    return v
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config-file',
         type=str,
@@ -1881,8 +1897,10 @@ def main():
         default=False,
         action='store_true'
     )
+    return parser.parse_args()
 
-    cfg = parser.parse_args()
+def main():
+    cfg = parse_args()
     file_cfg = parse_cfg_file(cfg.config_file)
     for key, val in file_cfg.items():
         attr = getattr(cfg, key)
@@ -1901,12 +1919,10 @@ def main():
                 print("Can't create data directory.", file=sys.stderr)
                 sys.exit(3)
 
-    if cfg.debug:
-        logging.basicConfig(filename=SCLI_LOG_FILE, level=logging.DEBUG)
-    else:
-        logging.basicConfig(filename=SCLI_LOG_FILE, level=logging.CRITICAL)
+    logging.basicConfig(filename=SCLI_LOG_FILE,
+                        level=logging.DEBUG if cfg.debug else logging.CRITICAL)
 
-    if cfg.signald and cfg.signald not in ('socat','netcat'):
+    if cfg.signald and cfg.signald not in ('socat', 'netcat'):
         print("error: SIGNALD must be either 'socat' or 'netcat'", file=sys.stderr)
         sys.exit(1)
 
