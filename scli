@@ -480,7 +480,8 @@ class Commands:
                 fn(args)
                 return
 
-    def _shell_parse_first(self, string):
+    @staticmethod
+    def _shell_parse_first(string):
         sio = io.StringIO(string)
         lex = shlex.shlex(sio, posix=True)
         lex.whitespace_split = True
