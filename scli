@@ -1042,6 +1042,10 @@ class ChatWindow(urwid.Pile):
                 self.set_caption(self._mode_map[new])
                 urwid.emit_signal(self, 'editor_mode_changed', old, new)
 
+        def reset(self):
+            self.mode = None
+            self.set_edit_text('')
+
         def _keypress_enter(self, size):
             send = True
             if not self.mode:
@@ -1053,8 +1057,7 @@ class ChatWindow(urwid.Pile):
                         send = True
             if send:
                 urwid.emit_signal(self, urwid.ACTIVATE, self.mode, self.edit_text)
-                self.mode = None
-                self.set_edit_text('')
+                self.reset()
                 return True
             return False
 
@@ -1305,7 +1308,7 @@ class ChatWindow(urwid.Pile):
             if key in ('enter', 'l'):
                 if self.search_mode:
                     real_index = self.search_list[self._wsearch.focus_position].real_index
-                    self._wline.set_edit_text(txt)
+                    self._wline.reset()
                     self._wlist.focus_position = real_index
                 else:
                     self.state.commands.open_attach(envelope) or self.state.commands.open_url(envelope)
