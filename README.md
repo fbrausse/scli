@@ -1,25 +1,29 @@
 # scli
-`scli` is a simple terminal user interface for [Signal](https://signal.org). It uses [signal-cli](https://github.com/AsamK/signal-cli) and [urwid](http://urwid.org/).
+`scli` is a simple terminal user interface for [Signal](https://signal.org). It uses [signal-cli](https://github.com/AsamK/signal-cli) or optionally [signald](https://github.com/thefinn93/signald) and [urwid](http://urwid.org/).
 
 # Installation
-- Firstly, you need to install [signal-cli](https://github.com/AsamK/signal-cli). Follow the guide provided in the README.
+- Firstly, you need to install [signal-cli](https://github.com/AsamK/signal-cli). Follow the guide provided in the README. The instructions for `signald` are similar, except you don't need the next step.
 - Install `libunixsocket-java` from your package manager if you have not installed it yet. (Arch Linux users should install `libmatthew-unix-java` from AUR. If you installed `signal-cli` from AUR, you can skip this step.)
 - Install `urwid`. You can install it trough your distributions package manager (search for `python3-urwid` or `python-urwid`) or you can use `pip` to install: `pip3 install urwid`.
 
 ## Linking your device and using
-`scli` does not provide anything for registering/linking, you need to do this using `signal-cli`.
+`scli` does not provide anything for registering/linking, you need to do this using `signal-cli` or `signald`.
 
-For linking your computer follow these steps (for registering a new number, see README of [signal-cli](https://github.com/AsamK/signal-cli))
+For linking your computer follow these steps (for registering a new number, see README of [signal-cli](https://github.com/AsamK/signal-cli) or that of [signald](https://github.com/thefinn93/signald))
 - Run `signal-cli link -n "DEVICE_NAME"`. (DEVICE_NAME is just an alias for your computer. You can skip `-n "DEVICE_NAME` part. Without that, your devices alias will be just `cli`.)
 - This will output `tsdevice:/...` URI (Do not terminate this command, it needs to be alive during linking process. Continue in a separate terminal.). Copy the URI and create a QR code with it using `qrencode` (or any other QR code generator of your choice):
 ```
 qrencode 'LINK' -o qrcode.png
 ```
 - Open Signal application on your phone and scan the QR code you just generated.
-- Run `signal-cli -u PHONE_NUMBER receive`. This is required to fetch your contacts for the first time.
+- Run `signal-cli -u PHONE_NUMBER receive`. This is required to fetch your contacts for the first time. For `signald` this step is not required.
 - Now you can start using:
 ```
 scli
+```
+For `signald`, you need one of these TOOLs to be installed: [socat](http://www.dest-unreach.org/socat/) or [netcat](https://salsa.debian.org/debian/netcat-openbsd) (the OpenBSD version)
+```
+scli --signald TOOL
 ```
 
 **Note**: `PHONE_NUMBER` starts with `+` followed by the country code.
