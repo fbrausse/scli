@@ -1591,16 +1591,11 @@ class State:
         self.commands.send_notification(contact_name, to_txt(formatted_message))
 
     def format_msg(self, message):
-        message = '\n'.join(textwrap.wrap(message, width=self.cfg.wrap_at))
+        if self.cfg.wrap_at:
+            message = '\n'.join(textwrap.wrap(message, width=self.cfg.wrap_at))
 
-        if not self.cfg.use_formatting:
-            return ntxt(message)
-
-        m = do_fmt(message)
-
-        if not m:
-            m = " "
-        return m
+        m = do_fmt(message) if self.cfg.use_formatting else ntxt(message)
+        return m if m else ''
 
     def print_received_message(self, envelope):
         source = envelope['source']
@@ -1832,7 +1827,7 @@ def main():
     )
     parser.add_argument('-w', '--wrap-at',
         type=int,
-        default=300,
+        default=None,
         help='Wrap messages at given column.'
     )
     parser.add_argument('--one-sided',
