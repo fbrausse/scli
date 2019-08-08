@@ -11,7 +11,6 @@ Current functionality:
 - receive messages from signal-cli via DBUS instead of parsing its stdout?
 - use some DBUS integration into python instead of relying on external tool
   in order to send files with ',' inside their filenames
-- implement help pop-up
 
 New functionality:
 - support other transports (e.g. via spectrum.io)?

@@ -48,7 +48,10 @@ PALETTE = [('normal', '', ''),
            ('bolditalic', 'italics,bold', ''),
            ('reversed', 'standout', ''),
            ('selected', 'bold', ''),
-           ('underline', 'underline', '')]
+           ('underline', 'underline', ''),
+           ('key-binding', 'bold,dark magenta', ''),
+           ('command','dark green', ''),
+        ]
 
 PALETTE_NO_ITALICS = [
            ('normal', '', ''),
@@ -60,7 +63,10 @@ PALETTE_NO_ITALICS = [
            ('bolditalic', 'bold', ''),
            ('reversed', 'standout', ''),
            ('selected', 'bold', ''),
-           ('underline', 'underline', '')]
+           ('underline', 'underline', ''),
+           ('key-binding', 'bold,dark magenta', ''),
+           ('command','dark green', ''),
+        ]
 
 LIST_FOCUS_MAP = { None: 'reversed',
                    'normal': 'reversed',
@@ -86,6 +92,12 @@ def btxt(txt):
 def itxt(txt):
     return ('italic', txt)
 
+def cmdtxt(txt):
+    return ('command',txt)
+
+def ktxt(txt):
+    return ('key-binding',txt)
+
 def to_txt(txt):
     if isinstance(txt, str):
         return txt
@@ -93,6 +105,31 @@ def to_txt(txt):
         return txt[1]
     else:
         return ''.join([to_txt(t) for t in txt])
+
+def do_fmt(message, fmap = FORMAT_MAP, keep_syms = True):
+    i, m = 0, []
+    while i < len(message):
+        c = message[i]
+        if c in fmap:
+            try:
+                end = message[i+1:].index(c)
+                sub = message[i+1:i+1+end]
+                if keep_syms:
+                    m.append(c)
+                if isinstance(fmap[c], str):
+                    m.append((fmap[c], sub))
+                else:
+                    m.append(fmap[c](sub))
+                if keep_syms:
+                    m.append(c)
+                i = i + 2 + end
+            except ValueError:
+                m.append(c)
+                i = i + 1
+        else:
+            m.append(c)
+            i = i + 1
+    return m
 
 # #############################################################################
 # utility
@@ -318,9 +355,10 @@ class FocusableText(urwid.AttrMap):
         super().__init__(text, None, focus_map=LIST_FOCUS_MAP)
 
 class NiceBox(urwid.AttrMap):
-    def __init__(self, w, title=''):
+    def __init__(self, w, title=None):
         box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'),
-                                          title_align='center', title=title),
+                                          title_align='center',
+                                          title=title if title else ''),
                             'box_normal')
         super().__init__(box, None, focus_map={'box_normal':'box_focused'})
 
@@ -463,19 +501,38 @@ class clip:
 # #############################################################################
 
 class Commands:
+
     def __init__(self, state):
         self.state = state
-        self.map = [(['attach', 'a'], self.attach),
-                    (['edit', 'e'], self.external_edit),
-                    (['attachClip', 'c'], self.attach_clip),
-                    (['openAttach', 'o'], self.open_last_attach),
-                    (['openUrl', 'u'], self.open_last_url),
-                    (['toggleNotifications', 'n'], self.toggle_notifications),
-                    (['toggleAutohide', 'h'], self.toggle_autohide),
-                    (['quit', 'q'], self.quit)]
+
+        class Desc:
+            def __init__(self, args, desc):
+                self.args = args
+                self.desc = desc
+
+        self.map = [
+            (['a','attach'], self.attach,
+             Desc([cmdtxt('PATH'),' [',cmdtxt('MSG...'),']'],
+                  'attach file to message.')),
+            (['e','edit'], self.external_edit,
+             Desc(['{ ',cmdtxt('PATH'),' | [',cmdtxt('MSG...'),'] }'],
+                  'edit message in external $EDITOR.')),
+            (['c','attachClip'], self.attach_clip,
+             Desc([], 'attaches clipboard content to message.')),
+            (['o','openAttach'], self.open_last_attach,
+             Desc([],'open last attachment in messages, if there is one.')),
+            (['u','openUrl'], self.open_last_url,
+             Desc([],'open last URL in messages, if there is one.')),
+            (['n','toggleNotifications'], self.toggle_notifications,
+             Desc([],'toggles desktop notifications on or off.')),
+            (['h','toggleAutohide'], self.toggle_autohide,
+             Desc([],'toggles autohide property of the contacts pane.')),
+            (['q','quit'], self.quit,
+             Desc([],'quit the program.'))
+        ]
 
     def exec(self, cmd, args):
-        for (abbrvs, fn) in self.map:
+        for (abbrvs, fn, _) in self.map:
             if cmd in [abbrv.lower() for abbrv in abbrvs]:
                 fn(args)
                 return
@@ -1266,7 +1323,7 @@ class MainWindow(urwid.Frame):
         # ui
         self._wcontacts = ContactsWindow(self.state)
         self._wchat = ChatWindow(self.state)
-        self._wstatus = urwid.Text("...")
+        self._wstatus = urwid.Text(['Type ',ktxt('?'),' for help, quit with ',cmdtxt(':q')])
         self._wnotify_count = urwid.Text("...")
         self._status_data = None
 
@@ -1341,11 +1398,44 @@ class MainWindow(urwid.Frame):
                  self._wcontext.options(width_amount=1)))
 
     def show_help_pop_up(self):
-        # TODO
-        self.state.show_dialog(VimListBox([
-            urwid.Text(btxt("Keybindings")),
-            urwid.Text(btxt("Commands"))
-        ]))
+        def fmt(txt):
+            return do_fmt(txt, { '#': ktxt, '*': btxt, }, False)
+        content = [
+            urwid.Text(btxt("Contacts/Chat window common key bindings")),
+            urwid.Text(fmt(
+            'Navigate with #up#/#down cursor# keys, or #k# and #j#; #page up#, ' +
+            '#page down#; #g# and #G# behave like #home# and #end#. Cycle ' +
+            'focus with #tab# or #shift tab#. Close pop-up dialogs (like this) ' +
+            'with #q#.\n' +
+            '  *Contacts:* #enter#/#l# open the selected chat; #u# closes it.\n' +
+            '  *Chat:* #y# copies the current message text to the clipboard. ' +
+            '#enter#, #l#, #o# open the selected message\'s last URL or ' +
+            'attachment (if any). #i# shows detailed information about the '
+            'selected message; #delete#, #d# delete it permanently.'
+            )),
+            urwid.Divider(' '),
+            urwid.Text(btxt("Commands")),
+            urwid.Text(fmt(
+            'Commands are entered by typing #:# outside the input line or as ' +
+            'first character there. The input indicator changes from \'*> *\' ' +
+            'to \'*:*\'. Leave Command mode by typing #backspace# at the ' +
+            'beginning of the input or #esc# anywhere. The following commands ' +
+            'are supported:'
+            )),
+        ]
+        for y,_,d in self.state.commands.map:
+            l = []
+            for x in y:
+                l += [':', cmdtxt(x)]
+                if d.args:
+                    l += [' '] + d.args
+                l += [', ']
+            del l[len(l)-1]
+            content += [urwid.Divider(' '),
+                        urwid.Text(l),
+                        urwid.Padding(urwid.Text(d.desc), left=2)]
+        self.state.show_dialog(VimListBox(content), title='Help',
+                               width=80, height=45) # on max w/h display no scrolling
 
     def on_current_contact_changed(self, old, current, focus=False):
         if self._status_data is self.state.current_contact:
@@ -1462,8 +1552,9 @@ class State:
     def set_error(self, err):
         urwid.emit_signal(self, 'error_changed', err)
 
-    def show_dialog(self, w):
-        self.loop.widget.show_pop_up(w, self)
+    def show_dialog(self, w, title = None,
+                    width = ('relative', 75), height = ('relative', 65)):
+        self.loop.widget.show_pop_up(w, title, self, width=width, height=height)
 
     def get_chat_for_contact(self, contact):
         if not contact:
@@ -1505,23 +1596,7 @@ class State:
         if not self.cfg.use_formatting:
             return ntxt(message)
 
-        i, m = 0, []
-        while i < len(message):
-            c = message[i]
-            if c in FORMAT_MAP:
-                try:
-                    end = message[i+1:].index(c)
-                    sub = message[i+1:i+1+end]
-                    m.append(c)
-                    m.append((FORMAT_MAP[c], sub))
-                    m.append(c)
-                    i = i + 2 + end
-                except ValueError:
-                    m.append(c)
-                    i = i + 1
-            else:
-                m.append(c)
-                i = i + 1
+        m = do_fmt(message)
 
         if not m:
             m = " "
@@ -1621,8 +1696,7 @@ class PopUpTarget(urwid.WidgetPlaceholder):
 
     # if notify, it must accept the signal 'dialog_finished' with 2 parameter:
     # 'accepted' (True or False) and 'result' (unknown)
-    def show_pop_up(self, widget, notify = None,
-                    width = ('relative', 75), height = ('relative', 65)):
+    def show_pop_up(self, widget, title = None, notify = None, **kwargs):
         org = self.original_widget
 
         def on_pop_up_closed(accepted, result):
@@ -1640,10 +1714,10 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                     btn_cancel = urwid.Button('Cancel', self.close, False)
                     b = urwid.GridFlow([btn_ok, btn_cancel], 10, 1, 0, 'right')
                     w = urwid.Pile([widget, ('pack',b)])
-                    super().__init__(w)
+                    super().__init__(w, title=title)
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
-                    super().__init__(widget)
+                    super().__init__(widget, title=title)
                     self._order = [ { widget: 0 } ]
 
             def close(self, btn=None, status=False):
@@ -1666,8 +1740,7 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                                              org,
                                              align='center',
                                              valign='middle',
-                                             width=width,
-                                             height=height)
+                                             **kwargs)
 
 
 # #############################################################################
