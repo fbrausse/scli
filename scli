@@ -364,11 +364,11 @@ class FocusableText(urwid.AttrMap):
         super().__init__(text, None, focus_map=LIST_FOCUS_MAP)
 
 class NiceBox(urwid.AttrMap):
-    def __init__(self, w, title=None):
+    def __init__(self, w, title=None, title_align='center',do_focus_map=True):
         box = urwid.AttrMap(urwid.LineBox(urwid.AttrMap(w, 'normal'),
-                                          title_align='center',
+                                          title_align=title_align,
                                           title=title if title else ''),
-                            'box_normal')
+                            'box_normal' if do_focus_map else None)
         super().__init__(box, None, focus_map={'box_normal':'box_focused'})
 
 CURSOR_FIRST = 'scli cursor first'
@@ -393,13 +393,13 @@ class VimListBox(urwid.ListBox):
     @body.setter
     def body(self, body):
         old = self.body
-        if body is not old and old:
+        if body is not old and old is not None:
             try:
                 urwid.disconnect_signal(old, 'modified', super()._invalidate)
             except NameError:
                 pass
         super()._set_body(body)
-        if body is not old and body:
+        if body is not old and body is not None:
             try:
                 self.render = self._original_render
                 urwid.connect_signal(body, 'modified', super()._invalidate)
@@ -960,7 +960,7 @@ class ContactsWindow(VimListBox):
     def on_current_contact_changed(self, _old, _current, _focus=False):
         if _current:
             self.set_contact_notify_count(self.focus, 0)
-        if _old != _current:
+        if _old is not _current:
             for w in self.body:
                 try:
                     if _old and w.contact == _old:
@@ -1026,6 +1026,31 @@ class ContactsWindow(VimListBox):
                     logging.exception(e)
                     logging.warning('update_contacts TypeError: self.body: %s', self.body)
                     self.focus_first()
+
+    def show_new_contact_dialog(self):
+        number = urwid.Edit()
+        name = urwid.Edit()
+        def cb(accepted, result):
+            if accepted:
+                self.state.signal.get_contact(number.get_edit_text())
+            urwid.disconnect_signal(self.state, 'dialog_finished', cb)
+        urwid.connect_signal(self.state, 'dialog_finished', cb)
+        def box (w, t):
+            return NiceBox(w, title=t, title_align='left', do_focus_map=False)
+        self.state.show_dialog(VimListBox([
+            box(number, 'Number'),
+            box(name, 'Name (optional)'),
+        ]), title='New Contact', width=25, height=9, buttons=2)
+
+    def keypress(self, size, key):
+        key = super().keypress(size, key)
+
+        if key in ('insert', '+'):
+            self.show_new_contact_dialog()
+        else:
+            return key
+        return None
+
 
 # #############################################################################
 # ChatWindow
@@ -1306,7 +1331,8 @@ class ChatWindow(urwid.Pile):
     def on_current_contact_changed(self, old, current, focus=False):
         self.set_title(current)
         chat = self.state.current_chat
-        self._wlist.body = chat if chat else ChatWindow._empty
+        assert current is None or chat is not None
+        self._wlist.body = chat if chat is not None else ChatWindow._empty
         if current:
             self.focus_chatlast()
 
@@ -1331,7 +1357,7 @@ class ChatWindow(urwid.Pile):
     def keypress(self, size, key):
         key = super().keypress(size, key)
 
-        if self.state.current_chat and self.is_focused_chat():
+        if self.state.current_chat is not None and self.is_focused_chat():
             key = self._w.original_widget.keypress(size, key)
             envelope = self.get_current_envelope()
             if key in ('enter', 'l'):
@@ -1459,7 +1485,8 @@ class MainWindow(urwid.Frame):
             '#page down#; #g# and #G# behave like #home# and #end#. Cycle ' +
             'focus with #tab# or #shift tab#. Close pop-up dialogs (like this) ' +
             'with #q#.\n' +
-            '  *Contacts:* #enter#/#l# open the selected chat; #u# closes it.\n' +
+            '  *Contacts:* #enter#/#l# open the selected chat; #u# closes it. ' +
+            'Press #insert# or #+# to add a new contact to the list.\n' +
             '  *Chat:* #y# copies the current message text to the clipboard. ' +
             '#enter#, #l#, #o# open the selected message\'s last URL or ' +
             'attachment (if any). #i# shows detailed information about the '
@@ -1569,6 +1596,7 @@ class State:
             self.set_error('error: no contact selected, cannot send message')
             return False
         if not (message or attachments):
+            self.set_status('not sending empty message')
             return False
 
         if not attachments:
@@ -1618,10 +1646,12 @@ class State:
         urwid.emit_signal(self, 'error_changed', err)
 
     def show_dialog(self, w, title = None,
-                    width = ('relative', 75), height = ('relative', 65)):
-        self.loop.widget.show_pop_up(w, title, self, width=width, height=height)
+                    width = ('relative', 75), height = ('relative', 65),
+                    **kwargs):
+        self.loop.widget.show_pop_up(w, title, self, width=width, height=height, **kwargs)
 
     def get_chat_for_contact(self, contact):
+        logging.debug('get_chat_for_contact: requested for %s', contact)
         if not contact:
             return None
 
