@@ -638,7 +638,7 @@ class Commands:
 
     def send_notification(self, sender, message): # TODO: does not belong here
         if self.state.cfg.enable_notifications:
-            mk_call(self.state.cfg.notification_command, {'%s': sender, '%m': message})
+            mk_call(self.state.cfg.notification_command, {'%s': sender, '%m': message}, disown=True)
 
     def quit(self, _):
         raise urwid.ExitMainLoop()
@@ -1520,6 +1520,10 @@ class State:
                 self.set_error('Attached file ' + attachments[i] + ' does not exist.')
                 logging.warning('send_message: Attached file(s) does not exist.')
                 return False
+
+        if self.cfg.no_daemon:
+            self.set_error('cannot send or receive messages when started with "--no-daemon"')
+            return False
 
         self.daemon.send_message(contact, message, attachment_paths)
         return True
