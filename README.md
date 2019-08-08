@@ -37,7 +37,7 @@ A simple two-paned interface is provided. Left pane contains the contact list an
 - Hitting `l` on a contact only starts conversation.
 - Hitting `o` on a message opens the URL if there is one, if not it opens the attachment if there is one.
 - Hitting `enter` on a message opens the attachment if there is one, if not it opens the URL if there is one.
-- Hitting `y` on a message puts it into system clipboard. (needs `xclip`)
+- Hitting `y` on a message puts it into system clipboard. (needs [xclip](https://github.com/astrand/xclip))
 - `g` focuses first contact/message.
 - `G` focuses last contact/message.
 - `d` deletes the message from your screen (and from your history, if history is enabled).
@@ -45,7 +45,8 @@ A simple two-paned interface is provided. Left pane contains the contact list an
 - `u` in contacts list unfocusses the currently active conversation (if any)
 
 ## Commands
-There are some basic commands that you can use. Hit `:` to enter command mode (or simply focus the input line and type `:`).
+There are some basic commands that you can use. Hit `:` to enter command mode (or simply focus the beginning of the input line and type `:`).
+You can abort the command mode by hitting `Backspace` at the beginning or `ESC` anywhere.
 
 - `:quit` or `:q` simply quits the program.
 - `:openUrl` or `:u` opens last URL in messages, if there is one.
@@ -65,6 +66,7 @@ Examples:
 
 ## Searching
 There is a built-in search feature. Simply hit `/` (or focus the input line then type `/`) and start typing, the chat will be filtered out based on your input. You can focus any of the search results and hit `enter` (or `l`) to open that result in full conversation.
+As with the command mode, `Backspace` at the beginning of the input line or `ESC` anywhere will stop the search mode and put you back into message editing.
 
 ## Configuration
 There are some simple configuration options. You can either pass them as command-line arguments or add them to your configuration file. Run `scli --help` to see options. Configuration file syntax is also pretty easy. Lines starting with `#` and empty lines are ignored, other lines should consist `key=value` pairs.
