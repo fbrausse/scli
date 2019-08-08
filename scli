@@ -1696,7 +1696,7 @@ class PopUpTarget(urwid.WidgetPlaceholder):
 
     # if notify, it must accept the signal 'dialog_finished' with 2 parameter:
     # 'accepted' (True or False) and 'result' (unknown)
-    def show_pop_up(self, widget, title = None, notify = None, **kwargs):
+    def show_pop_up(self, widget, title = None, notify = None, buttons = 1, **kwargs):
         org = self.original_widget
 
         def on_pop_up_closed(accepted, result):
@@ -1705,20 +1705,27 @@ class PopUpTarget(urwid.WidgetPlaceholder):
                 urwid.emit_signal(notify, 'dialog_finished', accepted, result)
 
         class PopUpWrapper(NiceBox):
-            def __init__(self, widget, buttons=True):
+            def __init__(self, widget):
                 self._widget = widget
                 self._widget.result = None
 
-                if buttons:
+                if not buttons:
+                    w = widget
+                    self._order = [ { w: 0 } ]
+                elif buttons == 1:
+                    btn_ok = urwid.Button('Close', self.close, False)
+                    b = urwid.GridFlow([btn_ok], 10, 1, 0, 'right')
+                    w = urwid.Pile([widget, ('pack',b)])
+                    self._order = [ { w: 0 }, { w: 1, b: 0 } ]
+                elif buttons == 2:
                     btn_ok = urwid.Button('OK', self.close, True)
                     btn_cancel = urwid.Button('Cancel', self.close, False)
                     b = urwid.GridFlow([btn_ok, btn_cancel], 10, 1, 0, 'right')
                     w = urwid.Pile([widget, ('pack',b)])
-                    super().__init__(w, title=title)
                     self._order = [ { w: 0 }, { w: 1, b: 0 }, { w: 1, b: 1 } ]
                 else:
-                    super().__init__(widget, title=title)
-                    self._order = [ { widget: 0 } ]
+                    raise Exception("invalid value for 'button': " + button)
+                super().__init__(w, title=title)
 
             def close(self, btn=None, status=False):
                 result = None
