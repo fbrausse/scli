@@ -16,7 +16,7 @@ import textwrap
 import random
 import shlex
 import io
-from subprocess import STDOUT, PIPE, Popen
+from subprocess import STDOUT, PIPE, DEVNULL, Popen
 from datetime import datetime
 
 import urwid
@@ -109,8 +109,7 @@ def mk_call(cmd, rmap=None, disown=False, use_pipe=True):
         cmd = cmd.replace(key, val)
 
     if disown:
-        with open(os.devnull, 'w') as f:
-            subprocess.Popen(cmd, shell=True, stdout=f, stderr=f, preexec_fn=os.setpgrp)
+        subprocess.Popen(cmd, shell=True, stdout=DEVNULL, stderr=DEVNULL, preexec_fn=os.setpgrp)
     else:
         if use_pipe:
             pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
