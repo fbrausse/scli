@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# pylint: disable=invalid-name, ungrouped-imports, too-many-lines, missing-docstring, line-too-long
+# pylint: disable=invalid-name, ungrouped-imports, too-many-lines, missing-docstring
 
 import os
 import re
@@ -558,7 +558,7 @@ class Commands:
 
     def external_edit(self, arg):
         parsed = self._shell_parse_first(arg)
-        if parsed and len(parsed[1]) == 0 and (parsed[0].startswith("/") or parsed[0].startswith("~/")):
+        if parsed and not parsed[1] and parsed[0].startswith("~/"):
             # parsed[0] is a path, treat it like the shell does
             msg_file_path = os.path.expanduser(parsed[0])
         else:
@@ -1311,7 +1311,8 @@ class ChatWindow(urwid.Pile):
                     self._wline.reset()
                     self._wlist.focus_position = real_index
                 else:
-                    self.state.commands.open_attach(envelope) or self.state.commands.open_url(envelope)
+                    (self.state.commands.open_attach(envelope) or
+                     self.state.commands.open_url(envelope))
             elif key == 'o':
                 self.state.commands.open_url(envelope) or self.state.commands.open_attach(envelope)
             elif key == 'y':
@@ -1528,10 +1529,9 @@ class State:
     def start_daemon(self, loop):
         if not self.cfg.signald:
             self.daemon = signalcli_daemon(self.cfg.username, loop, self.signal)
-        elif self.cfg.signald == 'socat':
-            self.daemon = signald_socat(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
         else:
-            self.daemon = signald_netcat_openbsd(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
+            fn = signald_socat if self.cfg.signald == 'socat' else signald_netcat_openbsd
+            self.daemon = fn(self.cfg.username, loop, self.signal, self.cfg.signald_sock)
 
     def send_message(self, message, attachments=None, contact=None):
         if not contact:
@@ -1560,7 +1560,8 @@ class State:
         return True
 
     def set_program_subtitle(self, subtitle, prefix=None):
-        my_contacts = list(filter(lambda x: x.get('number') == self.cfg.username, self.signal.contacts()))
+        my_contacts = list(filter(lambda x: x.get('number') == self.cfg.username,
+                                  self.signal.contacts()))
         my_name = get_contact_name(my_contacts[0]) if len(my_contacts) == 1 else self.cfg.username
         title = ''
         if prefix:
