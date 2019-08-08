@@ -213,7 +213,7 @@ def get_contact_name(x):
         return "NULL"
 
     name = x.get('name')
-    if name or name.strip(' ') != '':
+    if name and name.strip(' ') != '':
         return name
 
     number = x.get('number')
@@ -867,18 +867,20 @@ def signald_netcat_openbsd(user, loop, emit_obj, socket_path):
 
 
 class Signal:
-    signals = ['receive_message', 'send_message']
+    signals = ['receive_message', 'send_message', 'contacts_changed']
 
     def __init__(self, be_desc, user):
         self.user = user
         self._data = None
         self._buffer = b''
         self._path = be_desc.user_path(user)
+        self._unknown = []
         self.reload_data()
 
     def reload_data(self):
         with open(self._path) as f:
             self._data = json.load(f)
+        urwid.emit_signal(self, 'contacts_changed')
 
     def contacts(self):
         return list(filter(lambda x: bool(get_contact_name(x).strip(' ')),
@@ -890,6 +892,16 @@ class Signal:
                            filter(lambda n: bool(n['name'].strip(' ')),
                                   self._data["groupStore"]['groups'])))
 
+    def unknown(self):
+        return [x for x in self._unknown]
+
+    def all_contacts(self):
+        return {
+            'Groups': self.groups(),
+            'Contacts': self.contacts(),
+            'Unknown': self.unknown(),
+        }
+
     def get_contact(self, number_or_id):
         for contact in self.contacts():
             if contact['number'] == number_or_id:
@@ -898,6 +910,17 @@ class Signal:
         for group in self.groups():
             if group['groupId'] == number_or_id:
                 return group
+
+        for contact in self.unknown():
+            if contact['number'] == number_or_id:
+                return contact
+
+        contact = { 'number': number_or_id }
+        logging.info('Signal.get_contact(%s): adding %s as new contact to "unknown"',
+                     number_or_id, contact)
+        self._unknown.append(contact)
+        urwid.emit_signal(self, 'contacts_changed')
+        return contact
 
 urwid.register_signal(Signal, Signal.signals)
 
@@ -916,6 +939,7 @@ class ContactsWindow(VimListBox):
         self.update_contacts()
 
         urwid.connect_signal(self.state.signal, 'receive_message', self.on_receive_message)
+        urwid.connect_signal(self.state.signal, 'contacts_changed', self.update_contacts)
         urwid.connect_signal(self.state, 'current_contact_changed', self.on_current_contact_changed)
 
     def set_contact_notify_count(self, w, count):
@@ -985,17 +1009,23 @@ class ContactsWindow(VimListBox):
                  urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
                  urwid.Divider('-'))
             return list(map(adorn, h)) + [mk_contact(x) for x in l]
-        self.body[:] = (entry('Groups', self.state.signal.groups()) +
-                        entry('Contacts', self.state.signal.contacts()))
-        if not pre_focus:
-            self.focus_first()
-        else:
-            try:
-                self.focus_position = list(map   (lambda n, am: n,
-                                           filter(lambda n, am: am.contact == pre_focus,
-                                           enumerate(self.body))))[0]
-            except IndexError:
+        self.body.clear()
+        for k, v in self.state.signal.all_contacts().items():
+            self.body += entry(k, v)
+        if self.body:
+            if not pre_focus:
                 self.focus_first()
+            else:
+                try:
+                    self.focus_position = list(map   (lambda n, am: n,
+                                               filter(lambda n, am: am.contact == pre_focus,
+                                               enumerate(self.body))))[0]
+                except IndexError:
+                    self.focus_first()
+                except TypeError as e:
+                    logging.exception(e)
+                    logging.warning('update_contacts TypeError: self.body: %s', self.body)
+                    self.focus_first()
 
 # #############################################################################
 # ChatWindow
