@@ -1268,6 +1268,7 @@ class MainWindow(urwid.Frame):
         self._wchat = ChatWindow(self.state)
         self._wstatus = urwid.Text("...")
         self._wnotify_count = urwid.Text("...")
+        self._status_data = None
 
         self._wcontext = urwid.Columns([('weight', 1, NiceBox(self._wcontacts)),
                                         ('weight', 3, NiceBox(self._wchat))],
@@ -1277,9 +1278,9 @@ class MainWindow(urwid.Frame):
 
         # signals
         urwid.connect_signal(self.state, 'current_contact_changed', self.on_current_contact_changed)
-        urwid.connect_signal(self.state, 'status_changed', self.on_status_changed)
-        urwid.connect_signal(self.state, 'notification_changed', self.on_notification_changed)
-        urwid.connect_signal(self.state, 'error_changed', self.on_error_changed)
+        urwid.connect_signal(self.state, 'status_changed', self.set_status)
+        urwid.connect_signal(self.state, 'notification_changed', self.set_status)
+        urwid.connect_signal(self.state, 'error_changed', self.set_status)
         urwid.connect_signal(self.state.cfg, 'changed', self.on_cfg_changed)
         urwid.connect_signal(self._wcontacts, 'notify_count_changed', self.on_notify_count_changed)
 
@@ -1290,8 +1291,9 @@ class MainWindow(urwid.Frame):
             'Message ' + get_contact_name(contact) if contact else None,
             prefix = '(' + str(cnt) + ' new)' if cnt else None)
 
-    def set_status(self, txt):
+    def set_status(self, txt, data = None):
         self._wstatus.set_text(txt)
+        self._status_data = data
 
     @property
     def focus_position(self):
@@ -1346,21 +1348,12 @@ class MainWindow(urwid.Frame):
         ]))
 
     def on_current_contact_changed(self, old, current, focus=False):
-        if self.state.status_data is self.state.current_contact:
+        if self._status_data is self.state.current_contact:
             self.state.set_status('')
         self.update_program_title()
 
         if focus:
             self.focus_position = 'input'
-
-    def on_status_changed(self, status, data):
-        self.set_status(status)
-
-    def on_notification_changed(self, notif, data):
-        self.set_status(notif)
-
-    def on_error_changed(self, err):
-        self.set_status(err)
 
     def on_cfg_changed(self, key, val):
         if key == 'contacts_autohide':
@@ -1398,10 +1391,6 @@ class State:
         self.signal = Signal(get_backend_desc(cfg), cfg.username)
         self.cfg = cfg
         self.chats = {} # mapping get_contact_hash() to urwid.SimpleFocusListWalker
-        self.error = ''
-        self.status = ''
-        self.notification = ''
-        self.status_data = None
         self.current_contact = None
         self.loop = None
         self.daemon = None
@@ -1465,17 +1454,12 @@ class State:
         urwid.emit_signal(self, 'current_contact_changed', old, new, focus)
 
     def set_status(self, status, data=None):
-        self.status = status
-        self.status_data = data
         urwid.emit_signal(self, 'status_changed', status, data)
 
     def set_notification(self, notif, data=None):
-        self.notification = notif
-        self.status_data = data
         urwid.emit_signal(self, 'notification_changed', notif, data)
 
     def set_error(self, err):
-        self.error = err
         urwid.emit_signal(self, 'error_changed', err)
 
     def show_dialog(self, w):
