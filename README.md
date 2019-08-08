@@ -32,7 +32,7 @@ scli --signald TOOL
 A simple two-paned interface is provided. Left pane contains the contact list and the right pane contains the conversation. You can switch focus between panes by hitting `Tab` (or `Shift + Tab`). Hitting tab for the first time focuses the conversation, hitting it again focuses to input line. So the tab order is `Contacts -> Conversation -> Input`, you can use `Shift + Tab` for cycling backwards.
 
 ## Keys
-- Use `j`/`k` to go down/up in contacts list or in messages.
+- Use `j`/`k` or the cursor keys to go down/up in contacts list or in messages.
 - Hitting `enter` on a contact starts conversation and focuses to input line.
 - Hitting `l` on a contact only starts conversation.
 - Hitting `o` on a message opens the URL if there is one, if not it opens the attachment if there is one.
@@ -50,7 +50,7 @@ There are some basic commands that you can use. Hit `:` to enter command mode (o
 - `:quit` or `:q` simply quits the program.
 - `:openUrl` or `:u` opens last URL in messages, if there is one.
 - `:openAttach` or `:o` opens last attachment in messages, if there is one.
-- `:attach FILE_PATH` or `:a FILE_PATH` attaches given file to message.
+- `:attach FILE_PATH MSG` or `:a FILE_PATH MSG` attaches the file under the given path to message. The message is optional and FILE_PATH is shell-escaped, e.g. `:a 'this file'` will attach `this file` (including white-space).
 - `:attachClip` or `:c` attaches clipboard content to message. This command tries to detect clipboard content. If clipboard contains something with the mime-type `image/png` or `image/jpg`, simply attaches the image to message. If clipboard contains `text/uri-list` it attaches all the files in that URI list to your message. This command needs `xclip` installed.
 - `:toggleNotifications` or `:n` toggles desktop notifications.
 - `:edit` or `:e` lets you edit your message in your `$EDITOR`.
