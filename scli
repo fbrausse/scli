@@ -978,16 +978,15 @@ class ContactsWindow(VimListBox):
             pre_focus = self.focus.contact
         except AttributeError:
             pre_focus = None
-        def header(lbl):
-            return map(adorn, (urwid.Divider('-'),
-                               urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
-                               urwid.Divider('-')))
-        self.body[:] = [
-            *header('Groups'),
-            *map(mk_contact, self.state.signal.groups()),
-            *header('Contacts'),
-            *map(mk_contact, self.state.signal.contacts()),
-        ]
+        def entry(lbl, l):
+            if not l:
+                return []
+            h = (urwid.Divider('-'),
+                 urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
+                 urwid.Divider('-'))
+            return list(map(adorn, h)) + [mk_contact(x) for x in l]
+        self.body[:] = (entry('Groups', self.state.signal.groups()) +
+                        entry('Contacts', self.state.signal.contacts()))
         if not pre_focus:
             self.focus_first()
         else:
