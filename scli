@@ -1052,7 +1052,9 @@ class ChatWindow(urwid.Pile):
             '/' : ('bold', '/'),  # search mode
             ':' : ('bold', ':'),  # command mode
         })
-        self._wlist = VimListBox(self.state.current_chat)
+        self._empty = urwid.SimpleFocusListWalker([])
+        chat = self.state.current_chat
+        self._wlist = VimListBox(chat if chat else self._empty)
 
         self._w = urwid.WidgetPlaceholder(self._wlist)
         super().__init__([('pack'    , self._wtitle),
@@ -1150,7 +1152,7 @@ class ChatWindow(urwid.Pile):
             txt.real_index = i
             return txt
         found = [setx(i, txt)
-                 for i, txt in enumerate(self.state.current_chat)
+                 for i, txt in enumerate(self._wlist.body)
                  if search_txt in txt.original_widget.text]
         self.search_list.clear()
         self.search_list.extend(found)
@@ -1192,15 +1194,10 @@ class ChatWindow(urwid.Pile):
             self._wtitle.set_text('')
 
     def on_current_contact_changed(self, old, current, focus=False):
-        self.state.backup_chat(old)
-        self.state.clear_current_chat()
         self.set_title(current)
-
+        chat = self.state.current_chat
+        self._wlist.body = chat if chat else self._empty
         if current:
-            chat = self.state.chats.get(hash_contact(current))
-            if chat:
-                self.state.current_chat.extend(chat)
-
             self.focus_chatlast()
 
     def get_current_envelope(self):
@@ -1399,20 +1396,23 @@ class State:
     def __init__(self, cfg):
         self.signal = Signal(get_backend_desc(cfg), cfg.username)
         self.cfg = cfg
-        self.chats = {}
+        self.chats = {} # mapping get_contact_hash() to urwid.SimpleFocusListWalker
         self.error = ''
         self.status = ''
         self.notification = ''
         self.status_data = None
         self.current_contact = None
         self.loop = None
-        self.current_chat = urwid.SimpleFocusListWalker([])
         self.daemon = None
 
         self.commands = Commands(self)
 
         urwid.connect_signal(self.signal, 'receive_message', self.on_receive_message)
         urwid.connect_signal(self.signal, 'send_message', self.on_send_message)
+
+    @property
+    def current_chat(self):
+        return self.get_chat_for_contact(self.current_contact)
 
     def start_daemon(self, loop):
         if not self.cfg.signald:
@@ -1458,10 +1458,10 @@ class State:
         except AttributeError:
             pass
 
-    def set_current_contact(self, contact, focus=False):
+    def set_current_contact(self, new, focus=False):
         old = self.current_contact
-        self.current_contact = contact
-        urwid.emit_signal(self, 'current_contact_changed', old, contact, focus)
+        self.current_contact = new
+        urwid.emit_signal(self, 'current_contact_changed', old, new, focus)
 
     def set_status(self, status, data=None):
         self.status = status
@@ -1480,23 +1480,19 @@ class State:
     def show_dialog(self, w):
         self.loop.widget.show_pop_up(w, self)
 
-    def clear_current_chat(self):
-        self.current_chat.clear()
-
-    def backup_chat(self, contact):
-        if contact:
-            self.chats[hash_contact(contact)] = [x for x in self.current_chat]
-
-    def get_chat_for_envelope(self, envelope):
-        contact = get_envelope_contact(envelope, self.signal)
-        if contact == self.current_contact:
-            return self.current_chat
+    def get_chat_for_contact(self, contact):
+        if not contact:
+            return None
 
         contact_hash = hash_contact(contact)
         if contact_hash not in self.chats:
-            self.chats[contact_hash] = []
+            self.chats[contact_hash] = urwid.SimpleFocusListWalker([])
 
         return self.chats[contact_hash]
+
+    def get_chat_for_envelope(self, envelope):
+        contact = get_envelope_contact(envelope, self.signal)
+        return self.get_chat_for_contact(contact)
 
     def on_send_message(self, envelope):
         self.print_sent_message(envelope)
@@ -1609,7 +1605,6 @@ class State:
         if not self.cfg.save_history:
             return
 
-        self.backup_chat(self.current_contact)
         with open(SCLI_HISTORY_FILE, 'w') as history_file:
             envelopes = [x.envelope for vals in self.chats.values() for x in vals]
             items = {'envelopes': envelopes}
