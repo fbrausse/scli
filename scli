@@ -907,7 +907,9 @@ class Signal:
         return list(filter(lambda x: bool(get_contact_name(x).strip(' ')),
                            self._data['contactStore']['contacts']))
 
-    def groups(self):
+    def groups(self, only_active):
+        if not only_active:
+            return list(self._data["groupStore"]['groups'])
         # Need to filter out any groups that where "active" == false
         return list(filter(lambda a: bool(a['active']),
                            filter(lambda n: bool(n['name'].strip(' ')),
@@ -916,9 +918,9 @@ class Signal:
     def unknown(self):
         return [x for x in self._unknown]
 
-    def all_contacts(self):
+    def all_contacts(self, only_active):
         return {
-            'Groups': self.groups(),
+            'Groups': self.groups(only_active),
             'Contacts': self.contacts(),
             'Unknown': self.unknown(),
         }
@@ -928,7 +930,7 @@ class Signal:
             if contact['number'] == number_or_id:
                 return contact
 
-        for group in self.groups():
+        for group in self.groups(False):
             if group['groupId'] == number_or_id:
                 return group
 
@@ -1031,7 +1033,7 @@ class ContactsWindow(VimListBox):
                  urwid.Divider('-'))
             return list(map(adorn, h)) + [mk_contact(x) for x in l]
         self.body.clear()
-        for k, v in self.state.signal.all_contacts().items():
+        for k, v in self.state.signal.all_contacts(not self.state.cfg.inactive_groups).items():
             self.body += entry(k, v)
         if self.body:
             if not pre_focus:
@@ -1340,12 +1342,19 @@ class ChatWindow(urwid.Pile):
     def set_title(self, contact):
         if contact:
             num = contact.get("number")
-            if not num:
-                num = ', '.join([
-                    get_contact_name(self.state.signal.get_contact(number))
-                    for number in contact['members']])
+            if contact.get('groupId'):
+                if contact.get('members'):
+                    num = ', '.join([
+                        get_contact_name(self.state.signal.get_single_contact(number, False))
+                        for number in contact['members']])
+                else:
+                    num = itxt('<unknown members>')
 
-            self._wtitle.set_text([('bold', get_contact_name(contact)), ' (', num, ')'])
+            txt = [('bold', get_contact_name(contact)), ' (', num, ')']
+            if contact.get('groupId'):
+                if contact.get('active') == False:
+                    txt += [' [',itxt('inactive'),']']
+            self._wtitle.set_text(txt)
         else:
             self._wtitle.set_text('')
 
@@ -1985,6 +1994,11 @@ def parse_args():
         help="use SIGNALD={socat,netcat} to connect to signald socket instead " +
              "of spawning signal-cli; please note, that 'netcat' denotes " +
              "OpenBSD's netcat (must support '-U' for unix domain sockets)"
+    )
+    parser.add_argument('--inactive-groups',
+        default=False,
+        action='store_true',
+        help="also show groups not marked as 'active'"
     )
     parser.add_argument('--debug',
         default=False,
