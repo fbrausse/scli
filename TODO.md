@@ -13,4 +13,5 @@ Current functionality:
   in order to send files with ',' inside their filenames
 
 New functionality:
+- add Group management: create/add member/leave
 - support other transports (e.g. via spectrum.io)?

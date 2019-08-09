@@ -257,7 +257,7 @@ def get_envelope_msg(envelope):
     except (KeyError, TypeError):
         return None
 
-def get_envelope_contact(envelope, signal):
+def get_envelope_contact(envelope, signal, new_if_unknown):
     x = None
     if envelope.get('target'):
         x = envelope['target']
@@ -266,7 +266,9 @@ def get_envelope_contact(envelope, signal):
     else:
         x = envelope['source']
 
-    contact = signal.get_contact(x)
+    logging.debug('get_envelope_contact: %s', envelope)
+    contact = signal.get_contact(x, is_envelope_group_message(envelope),
+                                 new_if_unknown)
     if not contact:
         logging.critical('NULL_CONTACT:%s', envelope)
 
@@ -922,29 +924,35 @@ class Signal:
         return {
             'Groups': self.groups(only_active),
             'Contacts': self.contacts(),
-            'Unknown': self.unknown(),
+            'Unknown G': filter(lambda c: c.get('groupId'), self.unknown()),
+            'Unknown C': filter(lambda c: c.get('number'), self.unknown()),
         }
 
-    def get_contact(self, number_or_id):
-        for contact in self.contacts():
-            if contact['number'] == number_or_id:
-                return contact
-
-        for group in self.groups(False):
-            if group['groupId'] == number_or_id:
-                return group
-
-        for contact in self.unknown():
-            if (contact.get('number') == number_or_id or
-                contact.get('groupId') == number_or_id):
-                return contact
-
-        contact = { 'number': number_or_id }
-        logging.info('Signal.get_contact(%s): adding %s as new contact to "unknown"',
-                     number_or_id, contact)
+    def add_contact(self, number_or_id, is_group, name = None):
+        contact = { 'groupId' : number_or_id } if is_group else { 'number': number_or_id }
+        if name:
+            contact['name'] = name
+        logging.info('Signal.add_contact(%s,%s): adding %s as new %s contact to "unknown"',
+                     number_or_id, is_group, contact, 'group' if is_group else 'single')
         self._unknown.append(contact)
         urwid.emit_signal(self, 'contacts_changed')
         return contact
+
+    def get_group_contact(self, group_id, new_if_unknown = True):
+        for group in self.groups(False) + self.unknown():
+            if group.get('groupId') == group_id:
+                return group
+        return self.add_contact(group_id, True) if new_if_unknown else None
+
+    def get_single_contact(self, number, new_if_unknown = True):
+        for contact in self.contacts() + self.unknown():
+            if contact.get('number') == number:
+                return contact
+        return self.add_contact(number, False) if new_if_unknown else None
+
+    def get_contact(self, number_or_id, is_group, new_if_unknown):
+        get = self.get_group_contact if is_group else self.get_single_contact
+        return get(number_or_id, new_if_unknown)
 
 urwid.register_signal(Signal, Signal.signals)
 
@@ -995,7 +1003,7 @@ class ContactsWindow(VimListBox):
                     pass
 
     def on_receive_message(self, envelope):
-        contact = get_envelope_contact(envelope, self.state.signal)
+        contact = get_envelope_contact(envelope, self.state.signal, True)
         has_msg = get_envelope_msg(envelope)
         if contact == self.state.current_contact or has_msg is None:
             return
@@ -1057,7 +1065,7 @@ class ContactsWindow(VimListBox):
         name = urwid.Edit()
         def cb(accepted, result):
             if accepted:
-                self.state.signal.get_contact(number.get_edit_text())
+                self.state.signal.add_contact(number.get_edit_text(), False)
             urwid.disconnect_signal(self.state, 'dialog_finished', cb)
         urwid.connect_signal(self.state, 'dialog_finished', cb)
         def box (w, t):
@@ -1277,7 +1285,7 @@ class ChatWindow(urwid.Pile):
 
         state.show_dialog(VimListBox([
             *[DataItem(fmt(v, key=k), v) for k,v in [
-                ('Name   ', get_contact_name(state.signal.get_contact(source))),
+                ('Name   ', get_contact_name(self.state.signal.get_single_contact(source, False))),
                 ('Number ', source),
                 ('Date   ', date.strftime('%H:%M:%S (%Y-%m-%d)')),
                 ('Message', msg),
@@ -1694,7 +1702,7 @@ class State:
         return self.chats[contact_hash]
 
     def get_chat_for_envelope(self, envelope):
-        contact = get_envelope_contact(envelope, self.signal)
+        contact = get_envelope_contact(envelope, self.signal, True)
         return self.get_chat_for_contact(contact)
 
     def on_send_message(self, envelope):
@@ -1702,7 +1710,7 @@ class State:
 
     def on_receive_message(self, envelope):
         msg = get_envelope_msg(envelope)
-        sender = get_envelope_contact(envelope, self.signal)
+        sender = get_envelope_contact(envelope, self.signal, True)
         contact_name = get_contact_name(sender)
 
         if msg is None:
@@ -1731,7 +1739,7 @@ class State:
 
         txt = [btxt('>> ')]
         if is_group or self.cfg.show_names:
-            contact = self.signal.get_contact(source)
+            contact = self.signal.get_single_contact(source, False)
             if contact:
                 txt.append(ibtxt(get_contact_name(contact)))
             else:
