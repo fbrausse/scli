@@ -220,6 +220,11 @@ def get_contact_name(x):
     if number:
         return number
 
+    group_id = x.get('groupId')
+    if group_id:
+        return group_id
+
+    logging.critical('CONTACT HAS NO IDENTIFIER:%s', x)
     return "ERR"
 
 def get_contact_color(x):
@@ -730,9 +735,13 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
             target = None
             if contact.get('number'):
                 target = contact['number']
+                group_info = None
+                the_target = target
             else:
                 target = contact['groupId']
                 args.append('--group')
+                group_info = { 'groupId': target }
+                the_target = None
             args.append(target)
 
             if attachment_paths:
@@ -747,6 +756,8 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
                     'org.asamk.Signal.sendMessage', 'string:' + message,
                     'array:string:' + ','.join(attachment_paths),
                     'array:string:' + target]
+            group_info = None
+            the_target = target
 
         p = Popen(args, stdout=PIPE, stderr=PIPE)
         _out, error = p.communicate()
@@ -757,11 +768,12 @@ class SignalCLIDaemon(BackgroundProcess, JsonLineReaderMixin):
 
         ts = datetime.now().timestamp()
         envelope = {'source':self.user,
-                    'target': target,
+                    'target': the_target,
                     'timestamp': ts,
                     'dataMessage': {'message': message,
                                     'attachments': attachments,
-                                    'timestamp': ts}}
+                                    'timestamp': ts,
+                                    'groupInfo': group_info}}
 
         urwid.emit_signal(self._emit_obj, 'send_message', envelope)
 
@@ -832,7 +844,8 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         #    if data["type"] == "unexpected_error":
         #        raise ValueError("unexpected error occurred")
 
-    def send_message(self, recipient: str, text: str, attachments = None) -> None:
+    # TODO: group message support
+    def send_message(self, recipient, text: str, attachments = None) -> None:
         """
         Send a message.
 
@@ -844,19 +857,27 @@ class SignaldIO(BackgroundProcess, JsonLineReaderMixin):
         payload = {
             "type": "send",
             "username": self.user,
-            "recipientNumber": recipient['number'],
             "messageBody": text,
             "attachments": [{'filename': os.path.abspath(f)} for f in attachments],
         }
+        target = recipient.get('number')
+        if target is not None:
+            payload['recipientNumber'] = target
+            group_info = None
+        else:
+            group_id = recipient['groupId']
+            payload['recipientGroupId'] = group_id
+            group_info = { 'groupId': group_id }
         self._send_command(payload)
 
         ts = datetime.now().timestamp()
         envelope = {'source':self.user,
-                    'target': recipient['number'],
+                    'target': target,
                     'timestamp': ts,
                     'dataMessage': {'message': text,
                                     'attachments': attachments,
-                                    'timestamp': ts}}
+                                    'timestamp': ts,
+                                    'groupInfo': group_info}}
         urwid.emit_signal(self._emit_obj, 'send_message', envelope)
 
 def signald_socat(user, loop, emit_obj, socket_path):
