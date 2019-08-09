@@ -911,8 +911,8 @@ class Signal:
         if not only_active:
             return list(self._data["groupStore"]['groups'])
         # Need to filter out any groups that where "active" == false
-        return list(filter(lambda a: bool(a['active']),
-                           filter(lambda n: bool(n['name'].strip(' ')),
+        return list(filter(lambda a: not only_active or bool(a['active']),
+                           filter(lambda n: bool(n['name'].strip(' ') if n['name'] else False),
                                   self._data["groupStore"]['groups'])))
 
     def unknown(self):
@@ -935,7 +935,8 @@ class Signal:
                 return group
 
         for contact in self.unknown():
-            if contact['number'] == number_or_id:
+            if (contact.get('number') == number_or_id or
+                contact.get('groupId') == number_or_id):
                 return contact
 
         contact = { 'number': number_or_id }
@@ -996,7 +997,7 @@ class ContactsWindow(VimListBox):
     def on_receive_message(self, envelope):
         contact = get_envelope_contact(envelope, self.state.signal)
         has_msg = get_envelope_msg(envelope)
-        if contact == self.state.current_contact or not has_msg:
+        if contact == self.state.current_contact or has_msg is None:
             return
 
         for w in self.body:
@@ -1026,12 +1027,13 @@ class ContactsWindow(VimListBox):
         except AttributeError:
             pre_focus = None
         def entry(lbl, l):
-            if not l:
+            c = [mk_contact(x) for x in l]
+            if not c:
                 return []
             h = (urwid.Divider('-'),
                  urwid.Text(('bold', '~~ ' + lbl + ' ~~'), align='center'),
                  urwid.Divider('-'))
-            return list(map(adorn, h)) + [mk_contact(x) for x in l]
+            return list(map(adorn, h)) + c
         self.body.clear()
         for k, v in self.state.signal.all_contacts(not self.state.cfg.inactive_groups).items():
             self.body += entry(k, v)
