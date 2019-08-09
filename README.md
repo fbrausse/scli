@@ -3,7 +3,7 @@
 
 # Installation
 - Firstly, you need to install [signal-cli](https://github.com/AsamK/signal-cli). Follow the guide provided in the README. The instructions for `signald` are similar, except you don't need the next step.
-- Install `libunixsocket-java` from your package manager if you have not installed it yet. (Arch Linux users should install `libmatthew-unix-java` from AUR. If you installed `signal-cli` from AUR, you can skip this step.)
+- For DBUS and daemon support, install the [`libmatthew-java`](http://www.matthew.ath.cx/projects/java/) library, commonly found packaged under the names `libunixsocket-java` (Debian/Ubuntu) or `libmatthew-unix-java` (Arch Linux) from your package manager if you have not installed it yet. (If on Arch you installed `signal-cli` from AUR, you can skip this step.)
 - Install `urwid`. You can install it trough your distributions package manager (search for `python3-urwid` or `python-urwid`) or you can use `pip` to install: `pip3 install urwid`.
 
 ## Linking your device and using
@@ -17,16 +17,15 @@ qrencode 'LINK' -o qrcode.png
 ```
 - Open Signal application on your phone and scan the QR code you just generated.
 - Run `signal-cli -u PHONE_NUMBER receive`. This is required to fetch your contacts for the first time. For `signald` this step is not required.
+  **Note**: `PHONE_NUMBER` starts with `+` followed by the country code.
 - Now you can start using:
 ```
 scli
 ```
-For `signald`, you need one of these TOOLs to be installed: [socat](http://www.dest-unreach.org/socat/) or [netcat](https://salsa.debian.org/debian/netcat-openbsd) (the OpenBSD version)
+For `signald`, you need one of these TOOLs to be installed: [socat](http://www.dest-unreach.org/socat/) or [netcat](https://salsa.debian.org/debian/netcat-openbsd) (the OpenBSD version). After starting up `signald`, run:
 ```
 scli --signald TOOL
 ```
-
-**Note**: `PHONE_NUMBER` starts with `+` followed by the country code.
 
 # Usage
 A simple two-paned interface is provided. Left pane contains the contact list and the right pane contains the conversation. You can switch focus between panes by hitting `Tab` (or `Shift + Tab`). Hitting tab for the first time focuses the conversation, hitting it again focuses to input line. So the tab order is `Contacts -> Conversation -> Input`, you can use `Shift + Tab` for cycling backwards.
